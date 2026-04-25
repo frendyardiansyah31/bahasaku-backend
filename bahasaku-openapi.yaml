@@ -1,0 +1,227 @@
+openapi: 3.0.3
+
+info:
+  title: BahasaKu API
+  version: 1.0.0
+  description: API platform latihan Bahasa Indonesia adaptif untuk mahasiswa asing UIII.
+
+servers:
+  - url: http://localhost:8000
+    description: Local Development
+  - url: https://your-backend.onrender.com
+    description: Production
+
+tags:
+  - name: Auth
+    description: Register, login, logout, refresh token
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    UserObject:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Ahmad Khalid
+        email:
+          type: string
+          example: ahmad@uiii.ac.id
+        role:
+          type: string
+          enum: [user, instructor, admin]
+          example: user
+        is_onboarded:
+          type: boolean
+          example: false
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Pesan error
+
+  responses:
+    Unauthorized:
+      description: Token tidak ada atau kadaluarsa
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            message: Authentication credentials were not provided
+
+paths:
+  /api/auth/register/:
+    post:
+      tags: [Auth]
+      summary: Register akun baru
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, password_confirm]
+              properties:
+                name:
+                  type: string
+                  example: Ahmad Khalid
+                email:
+                  type: string
+                  format: email
+                  example: ahmad@uiii.ac.id
+                password:
+                  type: string
+                  minLength: 8
+                  example: password123
+                password_confirm:
+                  type: string
+                  example: password123
+      responses:
+        "201":
+          description: Register berhasil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Registrasi berhasil
+                  user:
+                    $ref: "#/components/schemas/UserObject"
+        "400":
+          description: Validasi gagal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                email_taken:
+                  summary: Email sudah terdaftar
+                  value:
+                    message: Email sudah terdaftar
+                password_mismatch:
+                  summary: Password tidak cocok
+                  value:
+                    message: Password dan konfirmasi password tidak cocok
+
+  /api/auth/login/:
+    post:
+      tags: [Auth]
+      summary: Login dan dapatkan JWT token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: ahmad@uiii.ac.id
+                password:
+                  type: string
+                  example: password123
+      responses:
+        "200":
+          description: Login berhasil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  refresh:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  user:
+                    $ref: "#/components/schemas/UserObject"
+        "401":
+          description: Email atau password salah
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Email atau password salah
+
+  /api/auth/token/refresh/:
+    post:
+      tags: [Auth]
+      summary: Perbarui access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh]
+              properties:
+                refresh:
+                  type: string
+                  example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        "200":
+          description: Access token baru berhasil dibuat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        "401":
+          description: Refresh token tidak valid atau kadaluarsa
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Refresh token tidak valid atau kadaluarsa
+
+  /api/auth/logout/:
+    post:
+      tags: [Auth]
+      summary: Logout dan invalidate refresh token
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh]
+              properties:
+                refresh:
+                  type: string
+                  example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        "200":
+          description: Logout berhasil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Logout berhasil
+        "401":
+          $ref: "#/components/responses/Unauthorized"

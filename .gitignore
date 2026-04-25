@@ -1,0 +1,52 @@
+# Environment
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+*.log
+local_settings.py
+/static/
+/media/
+
+# pipenv
+Pipfile.lock
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+memory/
+
+# CLAUDE.md
+CLAUDE.md
+
