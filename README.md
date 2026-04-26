@@ -1,6 +1,6 @@
 ---
 title: BahasaKu Backend
-emoji: 🇮🇩
+emoji: 🌏
 colorFrom: green
 colorTo: blue
 sdk: docker
