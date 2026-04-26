@@ -11,6 +11,9 @@ django-cors-headers = "*"
 drf-spectacular = "*"
 psycopg2-binary = "*"
 python-dotenv = "*"
+gunicorn = "*"
+whitenoise = "*"
+dj-database-url = "*"
 
 [dev-packages]
 

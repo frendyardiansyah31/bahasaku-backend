@@ -1,0 +1,9 @@
+.env
+db.sqlite3
+__pycache__
+*.pyc
+*.pyo
+.git
+Pipfile
+Pipfile.lock
+staticfiles/
