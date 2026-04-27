@@ -34,18 +34,16 @@ class RegisterSerializer(serializers.Serializer):
             raise serializers.ValidationError('Password dan konfirmasi password tidak cocok')
         return data
 
-    def create(self, validated_data):
-        first = validated_data.pop('first_name')
-        last = validated_data.pop('last_name')
-        validated_data.pop('password_confirm')
+    # def create(self, validated_data):
+    #     first = validated_data.pop('first_name')
+    #     last = validated_data.pop('last_name')
+    #     validated_data.pop('password_confirm')
 
-        name = f"{first} {last}"
-
-        user = User.objects.create_user(
-            name=name,
-            **validated_data
-        )
-        return user
+    #     user = User.objects.create_user(
+    #         name=name,
+    #         **validated_data
+    #     )
+    #     return user
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField()

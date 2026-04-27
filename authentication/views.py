@@ -39,8 +39,11 @@ class RegisterView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        first = serializer.validated_data['first_name']
+        last = serializer.validated_data['last_name']
+
         user = register_user(
-            name=serializer.validated_data['name'],
+            name=f"{first} {last}",
             email=serializer.validated_data['email'],
             password=serializer.validated_data['password'],
         )

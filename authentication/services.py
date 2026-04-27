@@ -24,7 +24,7 @@ def register_user(name: str, email: str, password: str) -> User:
     Buat akun user baru.
     Email uniqueness sudah divalidasi di serializer sebelum fungsi ini dipanggil.
     """
-    return User.objects.create_user(email=email, name=name, password=password)
+    return User.objects.create_user(name=name, email=email,  password=password)
 
 
 def login_user(request, email: str, password: str) -> tuple[str, str, User] | tuple[None, None, None]:
