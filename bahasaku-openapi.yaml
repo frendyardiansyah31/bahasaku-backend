@@ -8,12 +8,14 @@ info:
 servers:
   - url: http://localhost:8000
     description: Local Development
-  - url: https://your-backend.onrender.com
-    description: Production
+  - url: https://frendyardiansyah31-bahasaku-backend.hf.space
+    description: Production (Hugging Face Spaces)
 
 tags:
   - name: Auth
     description: Register, login, logout, refresh token
+  - name: Onboarding
+    description: Pengisian data awal setelah register — country dan initial level
 
 components:
   securitySchemes:
@@ -42,6 +44,27 @@ components:
         is_onboarded:
           type: boolean
           example: false
+        country:
+          type: string
+          nullable: true
+          example: Saudi Arabia
+        initial_level:
+          type: string
+          nullable: true
+          enum: [A1, A2]
+          example: A1
+
+    OnboardingRequest:
+      type: object
+      required: [country, initial_level]
+      properties:
+        country:
+          type: string
+          example: Saudi Arabia
+        initial_level:
+          type: string
+          enum: [A1, A2]
+          example: A1
 
     Error:
       type: object
@@ -223,5 +246,64 @@ paths:
                   message:
                     type: string
                     example: Logout berhasil
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/user/onboarding/:
+    post:
+      tags: [Onboarding]
+      summary: Isi data awal setelah register
+      description: |
+        Dipanggil sekali setelah register berhasil.
+        Mengisi country dan initial_level pada USER.
+        Setelah berhasil, is_onboarded berubah menjadi true.
+        Jika sudah pernah onboarding, return 400.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OnboardingRequest"
+            examples:
+              saudi_a1:
+                summary: Mahasiswa dari Saudi Arabia level A1
+                value:
+                  country: Saudi Arabia
+                  initial_level: A1
+              nigeria_a2:
+                summary: Mahasiswa dari Nigeria level A2
+                value:
+                  country: Nigeria
+                  initial_level: A2
+      responses:
+        "200":
+          description: Onboarding berhasil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Onboarding berhasil
+                  user:
+                    $ref: "#/components/schemas/UserObject"
+        "400":
+          description: Sudah pernah onboarding atau validasi gagal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                already_onboarded:
+                  summary: Sudah pernah onboarding
+                  value:
+                    message: User sudah pernah melakukan onboarding
+                invalid_level:
+                  summary: Level tidak valid
+                  value:
+                    message: initial_level harus A1 atau A2
         "401":
           $ref: "#/components/responses/Unauthorized"

@@ -14,8 +14,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .serializers import LoginSerializer, RegisterSerializer, UserSerializer
-from .services import get_new_access_token, login_user, register_user, revoke_refresh_token
+from .serializers import LoginSerializer, OnboardingSerializer, RegisterSerializer, UserSerializer
+from .services import get_new_access_token, login_user, onboard_user, register_user, revoke_refresh_token
 
 
 def _first_error(errors: dict) -> str:
@@ -118,3 +118,28 @@ class LogoutView(APIView):
 
         revoke_refresh_token(refresh_token, request.user)
         return Response({'message': 'Logout berhasil'}, status=status.HTTP_200_OK)
+
+
+class OnboardingView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = OnboardingSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {'message': _first_error(serializer.errors)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user, error = onboard_user(
+            user=request.user,
+            country=serializer.validated_data['country'],
+            initial_level=serializer.validated_data['initial_level'],
+        )
+        if error:
+            return Response({'message': error}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            {'message': 'Onboarding berhasil', 'user': UserSerializer(user).data},
+            status=status.HTTP_200_OK,
+        )

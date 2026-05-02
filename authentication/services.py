@@ -75,3 +75,21 @@ def revoke_refresh_token(refresh_token_str: str, user: User) -> None:
     Filter by user agar tidak bisa revoke token milik user lain.
     """
     RefreshToken.objects.filter(token=refresh_token_str, user=user).update(is_revoked=True)
+
+
+def onboard_user(user: User, country: str, initial_level: str) -> tuple[User, None] | tuple[None, str]:
+    """
+    Simpan data onboarding user (country + initial_level) dan tandai is_onboarded = True.
+
+    Returns:
+        (user, None) jika berhasil
+        (None, pesan_error) jika user sudah pernah onboarding
+    """
+    if user.is_onboarded:
+        return None, 'User sudah pernah melakukan onboarding'
+
+    user.country = country
+    user.initial_level = initial_level
+    user.is_onboarded = True
+    user.save()
+    return user, None
