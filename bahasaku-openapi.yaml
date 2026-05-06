@@ -15,7 +15,9 @@ tags:
   - name: Auth
     description: Register, login, logout, refresh token
   - name: Onboarding
-    description: Pengisian data awal setelah register — country dan initial level
+    description: Pengisian data awal setelah register
+  - name: Dashboard
+    description: Data utama beranda user
 
 components:
   securitySchemes:
@@ -65,6 +67,149 @@ components:
           type: string
           enum: [A1, A2]
           example: A1
+
+    SkillCard:
+      type: object
+      properties:
+        skill:
+          type: string
+          enum: [kosakata, grammar, menyimak]
+          example: kosakata
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+          example: 78
+        delta_this_week:
+          type: integer
+          description: Perubahan skor minggu ini. Positif = naik, negatif = turun, 0 = tidak ada perubahan
+          example: 5
+        status:
+          type: string
+          description: Label status berdasarkan skor
+          enum: [Bagus, Perlu latihan, Kuasai]
+          example: Bagus
+
+    StreakDay:
+      type: object
+      properties:
+        day:
+          type: string
+          description: Nama hari singkat
+          example: Sen
+        date:
+          type: string
+          format: date
+          example: "2026-04-21"
+        is_active:
+          type: boolean
+          description: true jika user berlatih di hari ini
+          example: true
+
+    RecommendedTopic:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 3
+        name:
+          type: string
+          example: Kata Sambung
+        skill:
+          type: string
+          enum: [kosakata, grammar, menyimak]
+          example: kosakata
+        total_questions:
+          type: integer
+          example: 10
+        estimated_minutes:
+          type: integer
+          example: 8
+
+    ActivitySummary:
+      type: object
+      properties:
+        sessions_this_week:
+          type: integer
+          example: 7
+        total_questions_answered:
+          type: integer
+          example: 143
+        average_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+          example: 82
+        cefr_level:
+          type: string
+          example: B1
+        cefr_label:
+          type: string
+          example: Menengah
+        strongest_skill:
+          type: string
+          enum: [kosakata, grammar, menyimak]
+          example: kosakata
+        xp_today:
+          type: integer
+          example: 80
+
+    DashboardResponse:
+      type: object
+      properties:
+        greeting:
+          type: object
+          properties:
+            name:
+              type: string
+              example: Andi
+            date:
+              type: string
+              example: Kamis, 23 April 2026
+            new_topics_count:
+              type: integer
+              description: Jumlah topik baru yang tersedia hari ini
+              example: 3
+        level:
+          type: object
+          properties:
+            cefr:
+              type: string
+              example: B1
+            label:
+              type: string
+              example: Menengah
+            total_xp:
+              type: integer
+              example: 1240
+            next_level_xp:
+              type: integer
+              description: Total XP yang dibutuhkan untuk naik ke level berikutnya
+              example: 2000
+            xp_remaining:
+              type: integer
+              description: Sisa XP menuju level berikutnya
+              example: 620
+        streak:
+          type: object
+          properties:
+            count:
+              type: integer
+              example: 4
+            days:
+              type: array
+              items:
+                $ref: "#/components/schemas/StreakDay"
+        skills:
+          type: array
+          items:
+            $ref: "#/components/schemas/SkillCard"
+        recommended_topics:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecommendedTopic"
+        activity_summary:
+          $ref: "#/components/schemas/ActivitySummary"
 
     Error:
       type: object
@@ -305,5 +450,99 @@ paths:
                   summary: Level tidak valid
                   value:
                     message: initial_level harus A1 atau A2
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/dashboard/:
+    get:
+      tags: [Dashboard]
+      summary: Ambil data beranda utama user
+      description: |
+        Mengembalikan semua data yang dibutuhkan halaman dashboard:
+        - Greeting dengan nama dan tanggal
+        - Level CEFR dan XP progress
+        - Skill scores (kosakata, grammar, menyimak)
+        - Streak harian 7 hari terakhir
+        - Rekomendasi topik hari ini (dari algoritma adaptif)
+        - Ringkasan aktivitas minggu ini
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Data dashboard berhasil diambil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardResponse"
+              example:
+                greeting:
+                  name: Andi
+                  date: Kamis, 23 April 2026
+                  new_topics_count: 3
+                level:
+                  cefr: B1
+                  label: Menengah
+                  total_xp: 1240
+                  next_level_xp: 2000
+                  xp_remaining: 620
+                streak:
+                  count: 4
+                  days:
+                    - { day: Sen, date: "2026-04-21", is_active: true }
+                    - { day: Sel, date: "2026-04-22", is_active: true }
+                    - { day: Rab, date: "2026-04-23", is_active: true }
+                    - { day: Kam, date: "2026-04-24", is_active: true }
+                    - { day: Jum, date: "2026-04-25", is_active: false }
+                    - { day: Sab, date: "2026-04-26", is_active: false }
+                    - { day: Min, date: "2026-04-27", is_active: false }
+                skills:
+                  - {
+                      skill: kosakata,
+                      score: 78,
+                      delta_this_week: 5,
+                      status: Bagus,
+                    }
+                  - {
+                      skill: grammar,
+                      score: 64,
+                      delta_this_week: 2,
+                      status: Bagus,
+                    }
+                  - {
+                      skill: menyimak,
+                      score: 51,
+                      delta_this_week: 0,
+                      status: Perlu latihan,
+                    }
+                recommended_topics:
+                  - {
+                      id: 3,
+                      name: Kata Sambung,
+                      skill: kosakata,
+                      total_questions: 10,
+                      estimated_minutes: 8,
+                    }
+                  - {
+                      id: 5,
+                      name: Kalimat Pasif,
+                      skill: grammar,
+                      total_questions: 12,
+                      estimated_minutes: 10,
+                    }
+                  - {
+                      id: 7,
+                      name: Percakapan Formal,
+                      skill: menyimak,
+                      total_questions: 8,
+                      estimated_minutes: 12,
+                    }
+                activity_summary:
+                  sessions_this_week: 7
+                  total_questions_answered: 143
+                  average_score: 82
+                  cefr_level: B1
+                  cefr_label: Menengah
+                  strongest_skill: kosakata
+                  xp_today: 80
         "401":
           $ref: "#/components/responses/Unauthorized"

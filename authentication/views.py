@@ -15,7 +15,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .serializers import LoginSerializer, OnboardingSerializer, RegisterSerializer, UserSerializer
-from .services import get_new_access_token, login_user, onboard_user, register_user, revoke_refresh_token
+from .services import get_dashboard_data, get_new_access_token, login_user, onboard_user, register_user, revoke_refresh_token
 
 
 def _first_error(errors: dict) -> str:
@@ -143,3 +143,11 @@ class OnboardingView(APIView):
             {'message': 'Onboarding berhasil', 'user': UserSerializer(user).data},
             status=status.HTTP_200_OK,
         )
+
+
+class DashboardView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        data = get_dashboard_data(request.user)
+        return Response(data, status=status.HTTP_200_OK)
