@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     # Local
     'authentication',
+    'quiz',
 ]
 
 MIDDLEWARE = [

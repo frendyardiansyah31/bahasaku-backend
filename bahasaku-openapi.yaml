@@ -18,6 +18,8 @@ tags:
     description: Pengisian data awal setelah register
   - name: Dashboard
     description: Data utama beranda user
+  - name: Quiz
+    description: Sesi latihan soal adaptif
 
 components:
   securitySchemes:
@@ -27,6 +29,8 @@ components:
       bearerFormat: JWT
 
   schemas:
+    # ── AUTH ─────────────────────────────────────────────────────────────────
+
     UserObject:
       type: object
       properties:
@@ -68,6 +72,8 @@ components:
           enum: [A1, A2]
           example: A1
 
+    # ── DASHBOARD ────────────────────────────────────────────────────────────
+
     SkillCard:
       type: object
       properties:
@@ -86,8 +92,7 @@ components:
           example: 5
         status:
           type: string
-          description: Label status berdasarkan skor
-          enum: [Bagus, Perlu latihan, Kuasai]
+          enum: [Mulai latihan, Perlu latihan, Bagus, Kuasai]
           example: Bagus
 
     StreakDay:
@@ -95,7 +100,7 @@ components:
       properties:
         day:
           type: string
-          description: Nama hari singkat
+          description: Nama hari singkat — Sen, Sel, Rab, Kam, Jum, Sab, Min
           example: Sen
         date:
           type: string
@@ -148,6 +153,7 @@ components:
           example: Menengah
         strongest_skill:
           type: string
+          nullable: true
           enum: [kosakata, grammar, menyimak]
           example: kosakata
         xp_today:
@@ -168,7 +174,6 @@ components:
               example: Kamis, 23 April 2026
             new_topics_count:
               type: integer
-              description: Jumlah topik baru yang tersedia hari ini
               example: 3
         level:
           type: object
@@ -184,11 +189,9 @@ components:
               example: 1240
             next_level_xp:
               type: integer
-              description: Total XP yang dibutuhkan untuk naik ke level berikutnya
               example: 2000
             xp_remaining:
               type: integer
-              description: Sisa XP menuju level berikutnya
               example: 620
         streak:
           type: object
@@ -211,6 +214,183 @@ components:
         activity_summary:
           $ref: "#/components/schemas/ActivitySummary"
 
+    # ── QUIZ ─────────────────────────────────────────────────────────────────
+
+    QuestionOption:
+      type: object
+      properties:
+        key:
+          type: string
+          description: Huruf pilihan jawaban
+          example: A
+        value:
+          type: string
+          description: Teks pilihan jawaban
+          example: Nasi goreng dimasak oleh ibu untuk sarapan.
+
+    Question:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 12
+        order:
+          type: integer
+          description: Urutan soal dalam sesi ini
+          example: 1
+        type:
+          type: string
+          enum: [multiple_choice, fill_blank, drag_drop]
+          example: multiple_choice
+        skill:
+          type: string
+          enum: [kosakata, grammar, menyimak]
+          example: grammar
+        text:
+          type: string
+          description: Teks utama soal
+          example: "Pilih kalimat pasif yang paling tepat untuk kalimat aktif berikut:"
+        context:
+          type: string
+          nullable: true
+          description: Kalimat konteks atau kutipan yang ditampilkan dengan styling italic. Null jika tidak ada.
+          example: '"Ibu memasak nasi goreng untuk sarapan."'
+        options:
+          type: array
+          nullable: true
+          description: Hanya ada jika type = multiple_choice
+          items:
+            $ref: "#/components/schemas/QuestionOption"
+        words:
+          type: array
+          nullable: true
+          description: Hanya ada jika type = drag_drop — kata-kata yang perlu disusun
+          items:
+            type: string
+          example: ["harganya", "Berapa", "Pak", "?"]
+
+    StartSessionResponse:
+      type: object
+      properties:
+        session_id:
+          type: integer
+          example: 42
+        topic:
+          type: object
+          properties:
+            id:
+              type: integer
+              example: 5
+            name:
+              type: string
+              example: Kalimat Pasif
+            skill:
+              type: string
+              enum: [kosakata, grammar, menyimak]
+              example: grammar
+            level:
+              type: string
+              example: B1 Menengah
+        total_questions:
+          type: integer
+          example: 5
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Question"
+
+    AnswerRequest:
+      type: object
+      required: [session_id, question_id, answer]
+      properties:
+        session_id:
+          type: integer
+          example: 42
+        question_id:
+          type: integer
+          example: 12
+        answer:
+          description: |
+            Format berbeda per tipe soal:
+            - multiple_choice: key pilihan, contoh "A"
+            - fill_blank: string jawaban, contoh "diselesaikan"
+            - drag_drop: array urutan kata, contoh ["Berapa", "harganya", "Pak", "?"]
+          example: "A"
+
+    AnswerResponse:
+      type: object
+      properties:
+        is_correct:
+          type: boolean
+          example: true
+        correct_answer:
+          description: Jawaban benar dalam format yang sama dengan request
+          example: "A"
+        feedback_correct:
+          type: string
+          description: Penjelasan jika jawaban benar
+          example: "Benar! Subjek aktif menjadi pelengkap 'oleh', objek aktif menjadi subjek pasif."
+        feedback_wrong:
+          type: string
+          description: Penjelasan jika jawaban salah
+          example: "Kurang tepat. Dalam kalimat pasif, objek aktif menjadi subjek."
+        xp_gained:
+          type: integer
+          description: XP yang didapat jika jawaban benar, 0 jika salah
+          example: 10
+
+    FinishSessionRequest:
+      type: object
+      required: [session_id]
+      properties:
+        session_id:
+          type: integer
+          example: 42
+
+    FinishSessionResponse:
+      type: object
+      properties:
+        session_id:
+          type: integer
+          example: 42
+        topic_name:
+          type: string
+          example: Kalimat Pasif
+        correct_count:
+          type: integer
+          example: 4
+        total_questions:
+          type: integer
+          example: 5
+        score_percent:
+          type: integer
+          description: Persentase skor bulat, contoh 80 = 80%
+          example: 80
+        xp_gained:
+          type: integer
+          example: 40
+        streak:
+          type: integer
+          description: Streak harian user setelah sesi selesai
+          example: 5
+        skills_updated:
+          type: array
+          items:
+            type: object
+            properties:
+              skill:
+                type: string
+                enum: [kosakata, grammar, menyimak]
+                example: grammar
+              old_score:
+                type: integer
+                example: 60
+              new_score:
+                type: integer
+                example: 64
+
+    # ── ERROR ────────────────────────────────────────────────────────────────
+
     Error:
       type: object
       properties:
@@ -228,7 +408,11 @@ components:
           example:
             message: Authentication credentials were not provided
 
+# ── PATHS ────────────────────────────────────────────────────────────────────
+
 paths:
+  # AUTH
+
   /api/auth/register/:
     post:
       tags: [Auth]
@@ -394,6 +578,8 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  # ONBOARDING
+
   /api/user/onboarding/:
     post:
       tags: [Onboarding]
@@ -453,6 +639,8 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  # DASHBOARD
+
   /api/dashboard/:
     get:
       tags: [Dashboard]
@@ -463,7 +651,7 @@ paths:
         - Level CEFR dan XP progress
         - Skill scores (kosakata, grammar, menyimak)
         - Streak harian 7 hari terakhir
-        - Rekomendasi topik hari ini (dari algoritma adaptif)
+        - Rekomendasi topik hari ini dari algoritma adaptif
         - Ringkasan aktivitas minggu ini
       security:
         - BearerAuth: []
@@ -544,5 +732,229 @@ paths:
                   cefr_label: Menengah
                   strongest_skill: kosakata
                   xp_today: 80
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # QUIZ
+
+  /api/quiz/{topic_id}/start/:
+    get:
+      tags: [Quiz]
+      summary: Mulai sesi latihan soal
+      description: |
+        Membuat sesi baru dan mengembalikan semua soal yang dipilih
+        oleh algoritma adaptif berdasarkan kelemahan user.
+
+        Tipe soal yang dikembalikan:
+        - multiple_choice — ada field options (array A-D), context opsional
+        - fill_blank — user ketik jawaban, context opsional
+        - drag_drop — ada field words (array kata yang perlu disusun)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: topic_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 5
+      responses:
+        "200":
+          description: Sesi berhasil dimulai
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartSessionResponse"
+              example:
+                session_id: 42
+                topic:
+                  id: 5
+                  name: Kalimat Pasif
+                  skill: grammar
+                  level: B1 Menengah
+                total_questions: 5
+                questions:
+                  - id: 12
+                    order: 1
+                    type: multiple_choice
+                    skill: grammar
+                    text: "Pilih kalimat pasif yang paling tepat untuk kalimat aktif berikut:"
+                    context: '"Ibu memasak nasi goreng untuk sarapan."'
+                    options:
+                      - {
+                          key: A,
+                          value: "Nasi goreng dimasak oleh ibu untuk sarapan.",
+                        }
+                      - {
+                          key: B,
+                          value: "Ibu dimasak nasi goreng untuk sarapan.",
+                        }
+                      - {
+                          key: C,
+                          value: "Nasi goreng memasak ibu untuk sarapan.",
+                        }
+                      - {
+                          key: D,
+                          value: "Sarapan dimasak nasi goreng oleh ibu.",
+                        }
+                    words: null
+                  - id: 15
+                    order: 2
+                    type: fill_blank
+                    skill: grammar
+                    text: "Lengkapi kalimat berikut:"
+                    context: '"Proyek itu ___ oleh tim kami minggu lalu."'
+                    options: null
+                    words: null
+                  - id: 18
+                    order: 3
+                    type: drag_drop
+                    skill: grammar
+                    text: "Susun kata-kata berikut menjadi kalimat pasif yang benar:"
+                    context: null
+                    options: null
+                    words: ["ditangkap", "Pencuri", "polisi", "oleh"]
+        "404":
+          description: Topik tidak ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Topik tidak ditemukan
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/quiz/{topic_id}/answer/:
+    post:
+      tags: [Quiz]
+      summary: Kirim jawaban satu soal
+      description: |
+        Mengirim jawaban untuk satu soal dan mendapat feedback langsung.
+
+        Format field answer berbeda per tipe soal:
+        - multiple_choice → string key pilihan, contoh "A"
+        - fill_blank → string jawaban, contoh "diselesaikan"
+        - drag_drop → array urutan kata, contoh ["Pencuri", "ditangkap", "oleh", "polisi"]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: topic_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 5
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnswerRequest"
+            examples:
+              multiple_choice:
+                summary: Jawaban pilihan ganda
+                value:
+                  session_id: 42
+                  question_id: 12
+                  answer: "A"
+              fill_blank:
+                summary: Jawaban isian
+                value:
+                  session_id: 42
+                  question_id: 15
+                  answer: "diselesaikan"
+              drag_drop:
+                summary: Jawaban drag-and-drop
+                value:
+                  session_id: 42
+                  question_id: 18
+                  answer: ["Pencuri", "ditangkap", "oleh", "polisi"]
+      responses:
+        "200":
+          description: Jawaban diterima dan feedback dikirim
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnswerResponse"
+              examples:
+                correct:
+                  summary: Jawaban benar
+                  value:
+                    is_correct: true
+                    correct_answer: "A"
+                    feedback_correct: "Benar! Subjek aktif menjadi pelengkap 'oleh', objek aktif menjadi subjek pasif."
+                    feedback_wrong: null
+                    xp_gained: 10
+                wrong:
+                  summary: Jawaban salah
+                  value:
+                    is_correct: false
+                    correct_answer: "A"
+                    feedback_correct: null
+                    feedback_wrong: "Kurang tepat. Dalam kalimat pasif, objek aktif (nasi goreng) menjadi subjek."
+                    xp_gained: 0
+        "400":
+          description: Session tidak valid atau sudah selesai
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Session tidak valid atau sudah selesai
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/quiz/{topic_id}/finish/:
+    post:
+      tags: [Quiz]
+      summary: Selesaikan sesi latihan
+      description: |
+        Mengakhiri sesi latihan dan memperbarui:
+        - Skor per skill (kosakata, grammar, menyimak)
+        - Total XP user
+        - Streak harian user
+
+        Mengembalikan ringkasan hasil sesi yang ditampilkan di layar selesai.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: topic_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 5
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinishSessionRequest"
+      responses:
+        "200":
+          description: Sesi berhasil diselesaikan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinishSessionResponse"
+              example:
+                session_id: 42
+                topic_name: Kalimat Pasif
+                correct_count: 4
+                total_questions: 5
+                score_percent: 80
+                xp_gained: 40
+                streak: 5
+                skills_updated:
+                  - { skill: grammar, old_score: 60, new_score: 64 }
+        "400":
+          description: Session tidak valid atau sudah selesai sebelumnya
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Session tidak valid atau sudah selesai
         "401":
           $ref: "#/components/responses/Unauthorized"
