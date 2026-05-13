@@ -1,7 +1,10 @@
-from rest_framework import status
+from rest_framework import status, serializers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse, inline_serializer
+from drf_spectacular.types import OpenApiTypes
 
 from .serializers import AnswerRequestSerializer, FinishSessionSerializer
 from .services import (
@@ -9,10 +12,26 @@ from .services import (
     get_topics, start_session,
 )
 
+ErrorResponseSerializer = inline_serializer(
+    name='ErrorMessageResponse',
+    fields={'message': serializers.CharField()}
+)
 
 class TopicListView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary="Daftar Topik",
+        description="Mengambil daftar topik pembelajaran. Bisa difilter berdasarkan kategori atau dicari dengan kata kunci.",
+        parameters=[
+            OpenApiParameter(name='category', description='Filter berdasarkan kategori', required=False, type=OpenApiTypes.STR),
+            OpenApiParameter(name='search', description='Pencarian kata kunci pada judul topik', required=False, type=OpenApiTypes.STR),
+        ],
+        responses={
+            200: OpenApiResponse(response=dict, description="Berisi list dari data topik")
+        },
+        tags=['Topics']
+    )
     def get(self, request):
         category = request.query_params.get('category')
         search = request.query_params.get('search')
@@ -23,6 +42,15 @@ class TopicListView(APIView):
 class TopicDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary="Detail Topik",
+        description="Melihat detail dari satu topik berdasarkan ID.",
+        responses={
+            200: OpenApiResponse(response=dict, description="Detail data topik"),
+            404: OpenApiResponse(response=ErrorResponseSerializer, description="Topik tidak ditemukan")
+        },
+        tags=['Topics']
+    )
     def get(self, request, id):
         data = get_topic_detail(user=request.user, topic_id=id)
         if data is None:
@@ -33,6 +61,15 @@ class TopicDetailView(APIView):
 class StartSessionView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary="Mulai Sesi Kuis",
+        description="Membuat sesi baru untuk topik tertentu dan mengembalikan daftar pertanyaan yang harus dijawab.",
+        responses={
+            200: OpenApiResponse(response=dict, description="Data sesi dan list pertanyaan"),
+            404: OpenApiResponse(response=ErrorResponseSerializer, description="Topik tidak ditemukan")
+        },
+        tags=['Quiz Session']
+    )
     def get(self, request, topic_id):
         topic = get_topic_or_none(topic_id)
         if not topic:
@@ -45,6 +82,16 @@ class StartSessionView(APIView):
 class AnswerView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary="Submit Jawaban",
+        description="Mengecek jawaban user untuk satu pertanyaan tertentu di dalam sesi kuis yang sedang berjalan.",
+        request=AnswerRequestSerializer,
+        responses={
+            200: OpenApiResponse(response=dict, description="Status jawaban (benar/salah) dan penjelasan"),
+            400: OpenApiResponse(response=ErrorResponseSerializer, description="Validasi gagal atau error pada pengecekan jawaban")
+        },
+        tags=['Quiz Session']
+    )
     def post(self, request, topic_id):
         serializer = AnswerRequestSerializer(data=request.data)
         if not serializer.is_valid():
@@ -66,6 +113,16 @@ class AnswerView(APIView):
 class FinishSessionView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary="Akhiri Sesi Kuis",
+        description="Mengakhiri sesi kuis, menghitung skor akhir, dan menambahkan XP ke profile user.",
+        request=FinishSessionSerializer,
+        responses={
+            200: OpenApiResponse(response=dict, description="Hasil akhir (skor, XP yang didapat, status lulus)"),
+            400: OpenApiResponse(response=ErrorResponseSerializer, description="Sesi tidak valid atau terjadi error")
+        },
+        tags=['Quiz Session']
+    )
     def post(self, request, topic_id):
         serializer = FinishSessionSerializer(data=request.data)
         if not serializer.is_valid():
