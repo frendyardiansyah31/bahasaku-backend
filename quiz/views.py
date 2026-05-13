@@ -4,7 +4,30 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .serializers import AnswerRequestSerializer, FinishSessionSerializer
-from .services import check_answer, finish_session, get_topic_or_none, start_session
+from .services import (
+    check_answer, finish_session, get_topic_detail, get_topic_or_none,
+    get_topics, start_session,
+)
+
+
+class TopicListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        category = request.query_params.get('category')
+        search = request.query_params.get('search')
+        data = get_topics(user=request.user, category=category, search=search)
+        return Response(data, status=status.HTTP_200_OK)
+
+
+class TopicDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, id):
+        data = get_topic_detail(user=request.user, topic_id=id)
+        if data is None:
+            return Response({'message': 'Topik tidak ditemukan'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(data, status=status.HTTP_200_OK)
 
 
 class StartSessionView(APIView):

@@ -18,6 +18,8 @@ tags:
     description: Pengisian data awal setelah register
   - name: Dashboard
     description: Data utama beranda user
+  - name: Topics
+    description: Daftar topik skenario yang tersedia
   - name: Quiz
     description: Sesi latihan soal adaptif
 
@@ -213,6 +215,99 @@ components:
             $ref: "#/components/schemas/RecommendedTopic"
         activity_summary:
           $ref: "#/components/schemas/ActivitySummary"
+
+    # ── TOPICS ───────────────────────────────────────────────────────────────
+
+    UserProgress:
+      type: object
+      properties:
+        percent:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Persentase topik yang sudah diselesaikan user (0–100)
+          example: 60
+        status:
+          type: string
+          description: Label progress dalam Bahasa Indonesia
+          enum: [Belum dimulai, Selesai]
+          example: Belum dimulai
+          x-status-note: >
+            Nilai antara 1–99 ditampilkan sebagai "{n}% selesai" dan tidak
+            termasuk enum di atas karena bersifat dinamis.
+
+    TopicSummary:
+      type: object
+      description: Data ringkasan topik untuk tampilan kartu di grid
+      properties:
+        id:
+          type: integer
+          example: 3
+        icon:
+          type: string
+          description: Emoji ikon topik
+          example: 🚌
+        name:
+          type: string
+          example: Naik Bus & Angkot
+        description:
+          type: string
+          example: Cara bertanya rute, membeli tiket, dan berkomunikasi dengan pengemudi atau penumpang lain.
+        location:
+          type: string
+          description: Label lokasi skenario yang ditampilkan di kartu
+          example: Di Angkutan Umum
+        category:
+          type: string
+          description: Kategori untuk filter
+          enum: [kampus, pasar, transportasi, kerja, lainnya]
+          example: transportasi
+        cefr_level:
+          type: string
+          description: Level CEFR topik ini
+          enum: [A1, A2, B1, B2, C1]
+          example: A2
+        skills:
+          type: array
+          description: Skill yang dilatih dalam topik ini
+          items:
+            type: string
+            enum: [kosakata, grammar, menyimak]
+          example: [kosakata, menyimak]
+        total_questions:
+          type: integer
+          description: Total soal dalam topik
+          example: 8
+        estimated_minutes:
+          type: integer
+          description: Estimasi waktu pengerjaan dalam menit
+          example: 8
+        user_progress:
+          $ref: "#/components/schemas/UserProgress"
+
+    TopicDetail:
+      allOf:
+        - $ref: "#/components/schemas/TopicSummary"
+        - type: object
+          description: Data lengkap topik untuk panel detail
+          properties:
+            example_dialogue:
+              type: string
+              description: Contoh kalimat percakapan yang merepresentasikan skenario
+              example: '"Mas, ini lewat Stasiun Bandung tidak? Saya turun di mana ya?"'
+            example_context:
+              type: string
+              description: Label konteks untuk contoh percakapan
+              example: "Konteks: naik angkot pertama kali"
+            subtopics:
+              type: array
+              description: Daftar sub-topik yang akan dipelajari dalam skenario ini
+              items:
+                type: string
+              example:
+                - Bertanya rute perjalanan
+                - Ungkapan di dalam kendaraan
+                - Meminta berhenti
 
     # ── QUIZ ─────────────────────────────────────────────────────────────────
 
@@ -732,6 +827,139 @@ paths:
                   cefr_label: Menengah
                   strongest_skill: kosakata
                   xp_today: 80
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # TOPICS
+
+  /api/topics/:
+    get:
+      tags: [Topics]
+      summary: Daftar semua topik skenario
+      description: |
+        Mengembalikan semua topik yang aktif (`is_active = true`).
+        Sertakan progress user untuk setiap topik berdasarkan riwayat Session.
+
+        Mendukung filter opsional via query parameter.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: category
+          in: query
+          required: false
+          description: Filter berdasarkan kategori. Kosongkan untuk semua kategori.
+          schema:
+            type: string
+            enum: [kampus, pasar, transportasi, kerja, lainnya]
+          example: transportasi
+        - name: search
+          in: query
+          required: false
+          description: Cari berdasarkan nama, lokasi, atau deskripsi topik (case-insensitive)
+          schema:
+            type: string
+          example: bus
+      responses:
+        "200":
+          description: Daftar topik berhasil diambil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    description: Total topik yang dikembalikan
+                    example: 12
+                  topics:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TopicSummary"
+              example:
+                count: 12
+                topics:
+                  - id: 1
+                    icon: 🎓
+                    name: Bertanya ke Dosen
+                    description: Cara menyampaikan pertanyaan, meminta klarifikasi, dan berdiskusi dengan dosen secara sopan.
+                    location: Di Kampus
+                    category: kampus
+                    cefr_level: B1
+                    skills: [kosakata, grammar]
+                    total_questions: 10
+                    estimated_minutes: 8
+                    user_progress:
+                      percent: 100
+                      status: Selesai
+                  - id: 3
+                    icon: 🚌
+                    name: Naik Bus & Angkot
+                    description: Cara bertanya rute, membeli tiket, dan berkomunikasi dengan pengemudi atau penumpang lain.
+                    location: Di Angkutan Umum
+                    category: transportasi
+                    cefr_level: A2
+                    skills: [kosakata, menyimak]
+                    total_questions: 8
+                    estimated_minutes: 8
+                    user_progress:
+                      percent: 60
+                      status: "60% selesai"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/topics/{id}/:
+    get:
+      tags: [Topics]
+      summary: Detail satu topik
+      description: |
+        Mengembalikan data lengkap satu topik termasuk contoh percakapan
+        dan daftar sub-topik yang akan dipelajari.
+
+        Dipakai untuk mengisi panel detail saat user mengklik kartu topik.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 3
+      responses:
+        "200":
+          description: Detail topik berhasil diambil
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopicDetail"
+              example:
+                id: 3
+                icon: 🚌
+                name: Naik Bus & Angkot
+                description: Cara bertanya rute, membeli tiket, dan berkomunikasi dengan pengemudi atau penumpang lain.
+                location: Di Angkutan Umum
+                category: transportasi
+                cefr_level: A2
+                skills: [kosakata, menyimak]
+                total_questions: 8
+                estimated_minutes: 8
+                user_progress:
+                  percent: 60
+                  status: "60% selesai"
+                example_dialogue: '"Mas, ini lewat Stasiun Bandung tidak? Saya turun di mana ya?"'
+                example_context: "Konteks: naik angkot pertama kali"
+                subtopics:
+                  - Bertanya rute perjalanan
+                  - Ungkapan di dalam kendaraan
+                  - Meminta berhenti
+        "404":
+          description: Topik tidak ditemukan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                message: Topik tidak ditemukan
         "401":
           $ref: "#/components/responses/Unauthorized"
 

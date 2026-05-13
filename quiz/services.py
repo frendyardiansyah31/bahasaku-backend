@@ -1,11 +1,88 @@
 from datetime import date
 
+from django.db.models import Count, Q
 from django.utils import timezone
 
 from .models import Question, Session, Topic, UserSkill
 
 XP_PER_CORRECT = 10
 
+
+# ── TOPICS ───────────────────────────────────────────────────────────────────
+
+def _get_user_progress(user, topic) -> dict:
+    """
+    Hitung progress user untuk satu topik berdasarkan Session.
+    - Belum ada session finished → 0%, "Belum dimulai"
+    - Ada session finished → 100%, "Selesai"
+    """
+    has_finished = Session.objects.filter(user=user, topic=topic, status='finished').exists()
+    if has_finished:
+        return {'percent': 100, 'status': 'Selesai'}
+    return {'percent': 0, 'status': 'Belum dimulai'}
+
+
+def _topic_to_summary(topic, user) -> dict:
+    return {
+        'id': topic.id,
+        'icon': topic.icon,
+        'name': topic.name,
+        'description': topic.description,
+        'location': topic.location,
+        'category': topic.category,
+        'cefr_level': topic.cefr_level,
+        'skills': topic.skills,
+        'total_questions': topic.question_count,
+        'estimated_minutes': topic.estimated_minutes,
+        'user_progress': _get_user_progress(user, topic),
+    }
+
+
+def get_topics(user, category: str = None, search: str = None) -> dict:
+    """
+    Ambil semua topik aktif dengan progress user.
+    Mendukung filter category dan pencarian teks (nama/lokasi/deskripsi).
+    """
+    qs = Topic.objects.filter(is_active=True).annotate(question_count=Count('questions'))
+
+    if category:
+        qs = qs.filter(category=category)
+
+    if search:
+        qs = qs.filter(
+            Q(name__icontains=search) |
+            Q(location__icontains=search) |
+            Q(description__icontains=search)
+        )
+
+    topics = list(qs)
+    return {
+        'count': len(topics),
+        'topics': [_topic_to_summary(t, user) for t in topics],
+    }
+
+
+def get_topic_detail(user, topic_id: int) -> dict | None:
+    """
+    Ambil detail lengkap satu topik termasuk contoh percakapan dan subtopik.
+    Return None jika topik tidak ditemukan atau tidak aktif.
+    """
+    try:
+        topic = Topic.objects.filter(is_active=True).annotate(
+            question_count=Count('questions')
+        ).get(id=topic_id)
+    except Topic.DoesNotExist:
+        return None
+
+    return {
+        **_topic_to_summary(topic, user),
+        'example_dialogue': topic.example_dialogue,
+        'example_context': topic.example_context,
+        'subtopics': topic.subtopics or [],
+    }
+
+
+# ── QUIZ SESSION ──────────────────────────────────────────────────────────────
 
 def get_topic_or_none(topic_id):
     try:
@@ -39,8 +116,8 @@ def start_session(user, topic):
         'topic': {
             'id': topic.id,
             'name': topic.name,
-            'skill': topic.skill,
-            'level': 'A1–B2',
+            'skills': topic.skills,
+            'level': topic.cefr_level,
         },
         'total_questions': len(questions),
         'questions': [
@@ -122,7 +199,6 @@ def finish_session(session_id, user):
 
     today = date.today()
 
-    # update streak before overwriting last_active
     if user.last_active and (today - user.last_active).days == 1:
         user.streak += 1
     elif not user.last_active or (today - user.last_active).days > 1:
@@ -132,12 +208,15 @@ def finish_session(session_id, user):
     user.last_active = today
     user.save(update_fields=['xp', 'streak', 'last_active'])
 
-    skill_obj = get_or_create_user_skill(user, topic.skill)
-    old_score = skill_obj.score
-    new_score = max(0, min(100, round(old_score * 0.7 + score_percent * 0.3)))
-    skill_obj.score = new_score
-    skill_obj.last_practiced = today
-    skill_obj.save(update_fields=['score', 'last_practiced'])
+    skills_updated = []
+    for skill_name in (topic.skills or []):
+        skill_obj = get_or_create_user_skill(user, skill_name)
+        old_score = skill_obj.score
+        new_score = max(0, min(100, round(old_score * 0.7 + score_percent * 0.3)))
+        skill_obj.score = new_score
+        skill_obj.last_practiced = today
+        skill_obj.save(update_fields=['score', 'last_practiced'])
+        skills_updated.append({'skill': skill_name, 'old_score': old_score, 'new_score': new_score})
 
     return {
         'session_id': session.id,
@@ -147,11 +226,5 @@ def finish_session(session_id, user):
         'score_percent': score_percent,
         'xp_gained': session.xp_gained,
         'streak': user.streak,
-        'skills_updated': [
-            {
-                'skill': topic.skill,
-                'old_score': old_score,
-                'new_score': new_score,
-            }
-        ],
+        'skills_updated': skills_updated,
     }, None

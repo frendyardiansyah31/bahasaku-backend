@@ -14,13 +14,33 @@ QUESTION_TYPE_CHOICES = [
     ('drag_drop', 'Drag and Drop'),
 ]
 
+CATEGORY_CHOICES = [
+    ('kampus', 'Kampus'),
+    ('pasar', 'Pasar'),
+    ('transportasi', 'Transportasi'),
+    ('kerja', 'Tempat Kerja'),
+    ('lainnya', 'Lainnya'),
+]
+
+CEFR_LEVEL_CHOICES = [
+    ('A1', 'A1'), ('A2', 'A2'),
+    ('B1', 'B1'), ('B2', 'B2'),
+    ('C1', 'C1'),
+]
+
 
 class Topic(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     icon = models.CharField(max_length=10, default='📚')
-    skill = models.CharField(max_length=20, choices=SKILL_CHOICES)
+    location = models.CharField(max_length=255, blank=True)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, blank=True)
+    cefr_level = models.CharField(max_length=5, choices=CEFR_LEVEL_CHOICES, blank=True)
+    skills = models.JSONField(default=list)
     estimated_minutes = models.IntegerField(default=10)
+    example_dialogue = models.TextField(null=True, blank=True)
+    example_context = models.CharField(max_length=255, null=True, blank=True)
+    subtopics = models.JSONField(default=list, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

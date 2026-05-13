@@ -5,8 +5,9 @@ from .models import Question, Session, Topic, UserSkill
 
 @admin.register(Topic)
 class TopicAdmin(admin.ModelAdmin):
-    list_display = ['name', 'skill', 'estimated_minutes', 'is_active']
-    list_filter = ['skill', 'is_active']
+    list_display = ['name', 'category', 'cefr_level', 'estimated_minutes', 'is_active']
+    list_filter = ['category', 'cefr_level', 'is_active']
+    search_fields = ['name', 'location', 'description']
 
 
 @admin.register(Question)
