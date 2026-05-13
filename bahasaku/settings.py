@@ -140,4 +140,7 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': 'API platform latihan Bahasa Indonesia adaptif untuk mahasiswa asing UIII.',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
+    # Menambahkan tombol "Authorize" untuk testing JWT/Token
+    'COMPONENT_SPLIT_PATCH': True,
+    'COMPONENT_SPLIT_REQUEST': True,
 }

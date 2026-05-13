@@ -9,10 +9,11 @@ Tanggung jawab file ini:
 Tidak ada business logic di sini — semua ada di services.py.
 """
 
-from rest_framework import status
+from rest_framework import status, serializers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema, OpenApiResponse, inline_serializer
 
 from .serializers import LoginSerializer, OnboardingSerializer, RegisterSerializer, UserSerializer
 from .services import get_dashboard_data, get_new_access_token, login_user, onboard_user, register_user, revoke_refresh_token
@@ -31,6 +32,21 @@ class RegisterView(APIView):
     authentication_classes = []
     permission_classes = []
 
+    @extend_schema(
+        summary="Registrasi User Baru",
+        request=RegisterSerializer,
+        responses={
+            201: inline_serializer(
+                name='RegisterSuccessResponse',
+                fields={
+                    'message': serializers.CharField(),
+                    'user': UserSerializer()
+                }
+            ),
+            400: OpenApiResponse(description="Validasi error (misal: email sudah terdaftar)")
+        },
+        tags=['Authentication']
+    )
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         if not serializer.is_valid():
@@ -57,6 +73,23 @@ class LoginView(APIView):
     authentication_classes = []
     permission_classes = []
 
+    @extend_schema(
+        summary="Login User",
+        request=LoginSerializer,
+        responses={
+            200: inline_serializer(
+                name='LoginSuccessResponse',
+                fields={
+                    'access': serializers.CharField(),
+                    'refresh': serializers.CharField(),
+                    'user': UserSerializer()
+                }
+            ),
+            400: OpenApiResponse(description="Input tidak valid"),
+            401: OpenApiResponse(description="Email atau password salah")
+        },
+        tags=['Authentication']
+    )
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         if not serializer.is_valid():
@@ -90,6 +123,21 @@ class TokenRefreshView(APIView):
     authentication_classes = []
     permission_classes = []
 
+    @extend_schema(
+        summary="Refresh Access Token",
+        request=inline_serializer(
+            name='TokenRefreshRequest',
+            fields={'refresh': serializers.CharField()}
+        ),
+        responses={
+            200: inline_serializer(
+                name='TokenRefreshResponse',
+                fields={'access': serializers.CharField()}
+            ),
+            401: OpenApiResponse(description="Refresh token tidak valid atau kadaluarsa")
+        },
+        tags=['Authentication']
+    )
     def post(self, request):
         refresh_token = request.data.get('refresh')
         if not refresh_token:
@@ -108,6 +156,22 @@ class TokenRefreshView(APIView):
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary="Logout User",
+        description="Akan merevoke refresh token sehingga tidak bisa digunakan lagi.",
+        request=inline_serializer(
+            name='LogoutRequest',
+            fields={'refresh': serializers.CharField()}
+        ),
+        responses={
+            200: inline_serializer(
+                name='LogoutResponse',
+                fields={'message': serializers.CharField()}
+            ),
+            400: OpenApiResponse(description="Refresh token wajib diisi")
+        },
+        tags=['Authentication']
+    )
     def post(self, request):
         refresh_token = request.data.get('refresh')
         if not refresh_token:
@@ -123,6 +187,21 @@ class LogoutView(APIView):
 class OnboardingView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary="Submit Data Onboarding",
+        request=OnboardingSerializer,
+        responses={
+            200: inline_serializer(
+                name='OnboardingSuccessResponse',
+                fields={
+                    'message': serializers.CharField(),
+                    'user': UserSerializer()
+                }
+            ),
+            400: OpenApiResponse(description="Validasi error atau user sudah pernah onboarding")
+        },
+        tags=['User Profile']
+    )
     def post(self, request):
         serializer = OnboardingSerializer(data=request.data)
         if not serializer.is_valid():
@@ -148,6 +227,19 @@ class OnboardingView(APIView):
 class DashboardView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary="Ambil Data Dashboard",
+        description="Mengembalikan semua data agregat untuk halaman utama user.",
+        responses={
+            200: OpenApiResponse(
+                description="Dashboard Data Object",
+                # Karena struktur dashboard sangat kompleks dan tidak ada serializer khusus, 
+                # kita bisa menggunakan tipe data generic dict untuk dokumentasi sementara.
+                response=dict 
+            )
+        },
+        tags=['User Profile']
+    )
     def get(self, request):
         data = get_dashboard_data(request.user)
         return Response(data, status=status.HTTP_200_OK)
