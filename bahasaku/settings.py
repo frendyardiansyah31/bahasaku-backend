@@ -144,3 +144,7 @@ SPECTACULAR_SETTINGS = {
     'COMPONENT_SPLIT_PATCH': True,
     'COMPONENT_SPLIT_REQUEST': True,
 }
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://frendyardiansyah31-bahasaku-backend.hf.space',
+]
