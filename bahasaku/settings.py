@@ -16,6 +16,7 @@ DEBUG = os.getenv('DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
 
 INSTALLED_APPS = [
+    'jazzmin',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -148,3 +149,29 @@ SPECTACULAR_SETTINGS = {
 CSRF_TRUSTED_ORIGINS = [
     'https://frendyardiansyah31-bahasaku-backend.hf.space',
 ]
+
+JAZZMIN_SETTINGS = {
+    # Judul di tab browser
+    "site_title": "BahasaKu Admin",
+    
+    # Judul di brand (pojok kiri atas)
+    "site_header": "BahasaKu",
+    "site_brand": "Dashboard BahasaKu",
+    
+    # Teks ucapan selamat datang di layar login
+    "welcome_sign": "Selamat Datang di Admin BahasaKu",
+    
+    # Hak cipta di footer
+    "copyright": "UIII BahasaKu",
+    
+    # Membiarkan sidebar tetap terbuka atau bisa di-collapse
+    "show_sidebar": True,
+    
+    # Mengelompokkan model agar lebih rapi (opsional)
+    "navigation_expanded": True,
+}
+
+# Jika ingin mengatur tema warna (ada banyak pilihan tema bawaan)
+JAZZMIN_UI_TWEAKS = {
+    "theme": "flatly", # Pilihan lain: darkly, litera, pulse, dll.
+}
