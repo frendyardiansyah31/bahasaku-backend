@@ -23,4 +23,6 @@ RUN python manage.py collectstatic --no-input
 
 EXPOSE 7860
 
-CMD ["sh", "-c", "python manage.py migrate && gunicorn bahasaku.wsgi:application --bind 0.0.0.0:7860 --workers 2"]
+# CMD ["sh", "-c", "python manage.py migrate && gunicorn bahasaku.wsgi:application --bind 0.0.0.0:7860 --workers 2"]
+
+CMD ["sh", "-c", "python manage.py migrate && python setup_admin.py && gunicorn bahasaku.wsgi:application --bind 0.0.0.0:7860 --workers 2"]
