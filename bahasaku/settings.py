@@ -16,7 +16,11 @@ DEBUG = os.getenv('DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
 
 INSTALLED_APPS = [
-    'jazzmin',
+    # 'jazzmin',
+    'unfold',
+    'unfold.contrib.filters',  # Opsional: untuk filter UI yang lebih bagus
+    'unfold.contrib.forms',
+
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -150,28 +154,37 @@ CSRF_TRUSTED_ORIGINS = [
     'https://frendyardiansyah31-bahasaku-backend.hf.space',
 ]
 
-JAZZMIN_SETTINGS = {
-    # Judul di tab browser
-    "site_title": "BahasaKu Admin",
+# JAZZMIN_SETTINGS = {
+#     # Judul di tab browser
+#     "site_title": "BahasaKu Admin",
     
-    # Judul di brand (pojok kiri atas)
-    "site_header": "BahasaKu",
-    "site_brand": "Dashboard BahasaKu",
+#     # Judul di brand (pojok kiri atas)
+#     "site_header": "BahasaKu",
+#     "site_brand": "Dashboard BahasaKu",
     
-    # Teks ucapan selamat datang di layar login
-    "welcome_sign": "Selamat Datang di Admin BahasaKu",
+#     # Teks ucapan selamat datang di layar login
+#     "welcome_sign": "Selamat Datang di Admin BahasaKu",
     
-    # Hak cipta di footer
-    "copyright": "UIII BahasaKu",
+#     # Hak cipta di footer
+#     "copyright": "UIII BahasaKu",
     
-    # Membiarkan sidebar tetap terbuka atau bisa di-collapse
-    "show_sidebar": True,
+#     # Membiarkan sidebar tetap terbuka atau bisa di-collapse
+#     "show_sidebar": True,
     
-    # Mengelompokkan model agar lebih rapi (opsional)
-    "navigation_expanded": True,
-}
+#     # Mengelompokkan model agar lebih rapi (opsional)
+#     "navigation_expanded": True,
+# }
 
-# Jika ingin mengatur tema warna (ada banyak pilihan tema bawaan)
-JAZZMIN_UI_TWEAKS = {
-    "theme": "flatly", # Pilihan lain: darkly, litera, pulse, dll.
+# # Jika ingin mengatur tema warna (ada banyak pilihan tema bawaan)
+# JAZZMIN_UI_TWEAKS = {
+#     "theme": "flatly", # Pilihan lain: darkly, litera, pulse, dll.
+# }
+
+UNFOLD = {
+    "SITE_TITLE": "BahasaKu Admin",
+    "SITE_HEADER": "BahasaKu",
+    "SITE_URL": "/",
+    # Menghapus logo bawaan Django
+    "SITE_SYMBOL": "speed", # Icon Google Material Symbols
+    "SHOW_HISTORY": True, 
 }

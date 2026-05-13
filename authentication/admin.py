@@ -2,6 +2,8 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.forms import UserChangeForm as BaseUserChangeForm, UserCreationForm as BaseUserCreationForm
 
+from unfold.admin import ModelAdmin
+
 from .models import RefreshToken, User
 
 
@@ -18,7 +20,7 @@ class UserChangeForm(BaseUserChangeForm):
 
 
 @admin.register(User)
-class UserAdmin(BaseUserAdmin):
+class UserAdmin(ModelAdmin,BaseUserAdmin):
     form = UserChangeForm
     add_form = UserCreationForm
     list_display = ('email', 'name', 'role', 'is_onboarded', 'is_active', 'is_staff')
@@ -42,7 +44,7 @@ class UserAdmin(BaseUserAdmin):
 
 
 @admin.register(RefreshToken)
-class RefreshTokenAdmin(admin.ModelAdmin):
+class RefreshTokenAdmin(ModelAdmin):
     list_display = ('user', 'is_revoked', 'expires_at', 'created_at')
     list_filter = ('is_revoked',)
     readonly_fields = ('created_at',)
