@@ -12,7 +12,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-key-change-in-production')
 
@@ -21,7 +21,6 @@ DEBUG = os.getenv('DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
 
 INSTALLED_APPS = [
-    # 'jazzmin',
     'unfold',
     'unfold.contrib.filters',  # Opsional: untuk filter UI yang lebih bagus
     'unfold.contrib.forms',
@@ -158,32 +157,6 @@ SPECTACULAR_SETTINGS = {
 CSRF_TRUSTED_ORIGINS = [
     'https://frendyardiansyah31-bahasaku-backend.hf.space',
 ]
-
-# JAZZMIN_SETTINGS = {
-#     # Judul di tab browser
-#     "site_title": "BahasaKu Admin",
-    
-#     # Judul di brand (pojok kiri atas)
-#     "site_header": "BahasaKu",
-#     "site_brand": "Dashboard BahasaKu",
-    
-#     # Teks ucapan selamat datang di layar login
-#     "welcome_sign": "Selamat Datang di Admin BahasaKu",
-    
-#     # Hak cipta di footer
-#     "copyright": "UIII BahasaKu",
-    
-#     # Membiarkan sidebar tetap terbuka atau bisa di-collapse
-#     "show_sidebar": True,
-    
-#     # Mengelompokkan model agar lebih rapi (opsional)
-#     "navigation_expanded": True,
-# }
-
-# # Jika ingin mengatur tema warna (ada banyak pilihan tema bawaan)
-# JAZZMIN_UI_TWEAKS = {
-#     "theme": "flatly", # Pilihan lain: darkly, litera, pulse, dll.
-# }
 
 UNFOLD = {
     "SITE_TITLE": "BahasaKu Admin",
