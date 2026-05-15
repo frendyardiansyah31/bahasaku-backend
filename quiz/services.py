@@ -1,5 +1,7 @@
+import json
 from datetime import date
 
+from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 
@@ -228,3 +230,30 @@ def finish_session(session_id, user):
         'streak': user.streak,
         'skills_updated': skills_updated,
     }, None
+
+
+# ── IMPORT ────────────────────────────────────────────────────────────────────
+
+def import_topics_from_json(json_file):
+    """
+    Baca file JSON, buat Topic + Question-nya sekaligus.
+    Jika ada error di mana pun, semua perubahan di-rollback (atomic).
+    """
+    try:
+        data = json.load(json_file)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Format JSON tidak valid: {e}")
+
+    if not isinstance(data, list):
+        raise ValueError("JSON harus berupa array/list dari topic, contoh: [{...}, {...}]")
+
+    created_names = []
+    with transaction.atomic():
+        for item in data:
+            questions_data = item.pop("questions", [])
+            topic = Topic.objects.create(**item)
+            for q in questions_data:
+                Question.objects.create(topic=topic, **q)
+            created_names.append(topic.name)
+
+    return created_names

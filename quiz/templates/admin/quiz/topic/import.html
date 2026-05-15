@@ -1,0 +1,308 @@
+{% extends "admin/base_site.html" %} {% load i18n %} {% block title %}Import
+Topic & Questions{% endblock %} {% block breadcrumbs %}
+<nav class="px-4 py-3 text-sm text-base-500 dark:text-base-400">
+  <a href="{% url 'admin:index' %}" class="hover:text-primary-600">Home</a>
+  &rsaquo;
+  <a
+    href="{% url 'admin:quiz_topic_changelist' %}"
+    class="hover:text-primary-600"
+    >Topics</a
+  >
+  &rsaquo; Import Topic &amp; Questions
+</nav>
+{% endblock %} {% block content %}
+<div class="flex flex-col gap-6 pb-8">
+  {# ── Upload Form ── #}
+  <div
+    class="bg-white block flex flex-col overflow-hidden p-6 relative rounded-default shadow-xs dark:bg-base-900 border border-base-200 dark:border-base-800"
+  >
+    <div
+      class="border-b border-base-200 flex items-center mb-6 -mt-6 -mx-6 py-4 px-6 dark:border-base-800"
+    >
+      <span class="material-symbols-outlined mr-2 text-base-400"
+        >upload_file</span
+      >
+      <h2 class="font-semibold text-[15px] text-important">Upload File JSON</h2>
+    </div>
+
+    <form
+      method="post"
+      enctype="multipart/form-data"
+      class="flex flex-col gap-5"
+    >
+      {% csrf_token %}
+
+      <div class="flex flex-col gap-1.5">
+        <label class="font-medium text-sm text-important"
+          >File JSON <span class="text-red-500">*</span></label
+        >
+
+        <label
+          for="json_file_input"
+          id="drop_zone"
+          class="flex flex-col items-center justify-center gap-3 w-full min-h-[180px] border-2 border-dashed border-base-300 dark:border-base-600 rounded-default cursor-pointer bg-base-50 dark:bg-base-800/50 hover:bg-base-100 dark:hover:bg-base-800 hover:border-primary-400 dark:hover:border-primary-500 transition-colors"
+        >
+          <span
+            id="drop_icon"
+            class="material-symbols-outlined mt-3 text-5xl text-base-400 dark:text-base-500"
+            >upload_file</span
+          >
+
+          <div id="drop_hint" class="text-center">
+            <p class="text-sm font-medium text-important">
+              Klik untuk memilih file
+            </p>
+            <p class="text-xs text-base-500 dark:text-base-400 mt-0.5">
+              atau drag &amp; drop di sini
+            </p>
+          </div>
+
+          <div
+            id="file_selected"
+            class="hidden flex-col items-center gap-1 text-center"
+          >
+            <span
+              class="material-symbols-outlined text-3xl text-primary-600 dark:text-primary-400"
+              >task</span
+            >
+            <p
+              id="file_name"
+              class="text-sm font-medium text-primary-600 dark:text-primary-400 max-w-xs truncate"
+            ></p>
+            <p class="text-xs text-base-500 dark:text-base-400">
+              Klik untuk ganti file
+            </p>
+          </div>
+
+          <span
+            class="font-medium inline-flex items-center mb-3 gap-1.5 px-3 py-2 rounded-default border border-base-200 bg-white shadow-xs text-important text-sm hover:bg-base-100/80 dark:border-base-700 dark:bg-transparent dark:hover:bg-base-800/80"
+          >
+            <span class="material-symbols-outlined text-[16px]"
+              >folder_open</span
+            >
+            Pilih File JSON
+          </span>
+        </label>
+
+        <input
+          type="file"
+          id="json_file_input"
+          name="json_file"
+          accept=".json"
+          required
+          class="hidden"
+        />
+
+        <p class="text-xs text-base-500 dark:text-base-400">
+          Hanya file <strong>.json</strong>. Jika ada error pada salah satu
+          topic atau question, semua import akan dibatalkan (rollback).
+        </p>
+      </div>
+
+      <script>
+        (function () {
+          var input = document.getElementById("json_file_input");
+          var zone = document.getElementById("drop_zone");
+          var hint = document.getElementById("drop_hint");
+          var icon = document.getElementById("drop_icon");
+          var selected = document.getElementById("file_selected");
+          var nameEl = document.getElementById("file_name");
+
+          function showFile(name) {
+            nameEl.textContent = name;
+            hint.classList.add("hidden");
+            icon.classList.add("hidden");
+            selected.classList.remove("hidden");
+            selected.classList.add("flex");
+            zone.classList.add(
+              "border-primary-400",
+              "dark:border-primary-500",
+              "bg-primary-50",
+              "dark:bg-primary-900/10",
+            );
+          }
+
+          function resetZone() {
+            hint.classList.remove("hidden");
+            icon.classList.remove("hidden");
+            selected.classList.add("hidden");
+            selected.classList.remove("flex");
+            zone.classList.remove(
+              "border-primary-400",
+              "dark:border-primary-500",
+              "bg-primary-50",
+              "dark:bg-primary-900/10",
+            );
+          }
+
+          input.addEventListener("change", function () {
+            this.files.length > 0 ? showFile(this.files[0].name) : resetZone();
+          });
+
+          zone.addEventListener("dragover", function (e) {
+            e.preventDefault();
+            this.classList.add(
+              "border-primary-400",
+              "bg-primary-50",
+              "dark:bg-primary-900/10",
+            );
+          });
+
+          zone.addEventListener("dragleave", function () {
+            if (!input.files.length)
+              this.classList.remove(
+                "border-primary-400",
+                "bg-primary-50",
+                "dark:bg-primary-900/10",
+              );
+          });
+
+          zone.addEventListener("drop", function (e) {
+            e.preventDefault();
+            var file = e.dataTransfer.files[0];
+            if (file && file.name.endsWith(".json")) {
+              var dt = new DataTransfer();
+              dt.items.add(file);
+              input.files = dt.files;
+              showFile(file.name);
+            } else {
+              resetZone();
+            }
+          });
+        })();
+      </script>
+
+      <div class="flex gap-3 pt-1">
+        <button
+          type="submit"
+          class="font-medium inline-flex items-center gap-2 px-3 py-2 rounded-default cursor-pointer border border-transparent bg-primary-600 text-white hover:bg-primary-600/80"
+        >
+          <span class="material-symbols-outlined text-[18px]">upload</span>
+          Import Sekarang
+        </button>
+        <a
+          href="{% url 'admin:quiz_topic_changelist' %}"
+          class="font-medium inline-flex items-center gap-2 px-3 py-2 rounded-default cursor-pointer border border-base-200 bg-white shadow-xs text-important hover:bg-base-100/80 dark:border-base-700 dark:bg-transparent dark:hover:bg-base-800/80"
+        >
+          Batal
+        </a>
+      </div>
+    </form>
+  </div>
+
+  {# ── Format JSON ── #}
+  <div
+    class="bg-white block flex flex-col overflow-hidden p-6 relative rounded-default shadow-xs dark:bg-base-900 border border-base-200 dark:border-base-800"
+  >
+    <div
+      class="border-b border-base-200 flex items-center mb-6 -mt-6 -mx-6 py-4 px-6 dark:border-base-800"
+    >
+      <span class="material-symbols-outlined mr-2 text-base-400">code</span>
+      <h2 class="font-semibold text-[15px] text-important">
+        Contoh Format JSON
+      </h2>
+    </div>
+
+    <p class="text-sm text-base-600 dark:text-base-300 mb-4">
+      File JSON harus berupa <strong>array</strong> (daftar) dari topic. Setiap
+      topic boleh memiliki banyak questions. Field yang tidak wajib bisa
+      dikosongkan (<code
+        class="bg-base-100 px-1 rounded text-xs dark:bg-base-800"
+        >null</code
+      >) atau dihapus sama sekali.
+    </p>
+
+    <pre
+      class="text-xs bg-base-50 dark:bg-base-800 rounded-default p-4 overflow-x-auto leading-relaxed border border-base-200 dark:border-base-700"
+    ><code>[
+  {
+    "name": "Kantin Kampus",
+    "description": "Latihan percakapan sehari-hari di kantin kampus UIII",
+    "icon": "🍽️",
+    "location": "Kantin UIII",
+    "category": "kampus",
+    "cefr_level": "A1",
+    "skills": ["kosakata", "grammar"],
+    "estimated_minutes": 15,
+    "example_dialogue": "A: Mau pesan apa?\nB: Saya mau nasi goreng, Mas.",
+    "example_context": "Di kantin kampus saat istirahat siang",
+    "subtopics": ["Memesan makanan", "Menanyakan harga", "Membayar"],
+    "is_active": true,
+    "questions": [
+      {
+        "type": "multiple_choice",
+        "skill": "kosakata",
+        "text": "Apa artinya 'makan siang'?",
+        "context": null,
+        "options": ["breakfast", "lunch", "dinner", "snack"],
+        "words": null,
+        "correct_answer": "B",
+        "feedback_correct": "Benar! Makan siang artinya makan di siang hari.",
+        "feedback_wrong": "Salah. Makan siang = lunch (pilihan B)."
+      },
+      {
+        "type": "fill_blank",
+        "skill": "grammar",
+        "text": "Saya ___ nasi goreng. (ingin memesan)",
+        "context": "Kamu sedang di kantin dan ingin memesan makanan.",
+        "options": null,
+        "words": null,
+        "correct_answer": "mau pesan",
+        "feedback_correct": "Tepat! 'Mau pesan' digunakan untuk memesan sesuatu.",
+        "feedback_wrong": "Yang benar adalah 'mau pesan'."
+      },
+      {
+        "type": "drag_drop",
+        "skill": "grammar",
+        "text": "Susun kata-kata berikut menjadi kalimat yang benar:",
+        "context": null,
+        "options": null,
+        "words": ["saya", "mau", "pesan", "nasi", "goreng"],
+        "correct_answer": "saya,mau,pesan,nasi,goreng",
+        "feedback_correct": "Urutan kalimat sudah benar!",
+        "feedback_wrong": "Urutan yang benar: saya - mau - pesan - nasi - goreng."
+      }
+    ]
+  }
+]</code></pre>
+
+    <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div
+        class="rounded-default border border-base-200 dark:border-base-700 p-3"
+      >
+        <p class="text-xs font-semibold text-important mb-1">
+          Nilai valid untuk <code>category</code>
+        </p>
+        <p class="text-xs text-base-500 dark:text-base-400">
+          <code>kampus</code> · <code>pasar</code> · <code>transportasi</code> ·
+          <code>kerja</code> · <code>lainnya</code>
+        </p>
+      </div>
+      <div
+        class="rounded-default border border-base-200 dark:border-base-700 p-3"
+      >
+        <p class="text-xs font-semibold text-important mb-1">
+          Nilai valid untuk <code>cefr_level</code>
+        </p>
+        <p class="text-xs text-base-500 dark:text-base-400">
+          <code>A1</code> · <code>A2</code> · <code>B1</code> ·
+          <code>B2</code> · <code>C1</code>
+        </p>
+      </div>
+      <div
+        class="rounded-default border border-base-200 dark:border-base-700 p-3"
+      >
+        <p class="text-xs font-semibold text-important mb-1">
+          Nilai valid untuk <code>type</code> &amp;
+          <code>skill</code> (question)
+        </p>
+        <p class="text-xs text-base-500 dark:text-base-400">
+          type: <code>multiple_choice</code> · <code>fill_blank</code> ·
+          <code>drag_drop</code><br />skill: <code>kosakata</code> ·
+          <code>grammar</code> · <code>menyimak</code>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

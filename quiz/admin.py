@@ -1,10 +1,15 @@
 from django import forms
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.http import HttpResponseRedirect
+from django.shortcuts import render
+from django.urls import reverse
 
 from unfold.admin import ModelAdmin
+from unfold.decorators import action
 from unfold.widgets import UnfoldAdminTextInputWidget
 
 from .models import Question, Session, Topic, UserSkill, SKILL_CHOICES
+from .services import import_topics_from_json
 
 class TopicAdminForm(forms.ModelForm):
     # Ubah input JSON 'skills' menjadi Checkbox pilihan ganda
@@ -60,6 +65,25 @@ class TopicAdmin(ModelAdmin):
     list_display = ['name', 'category', 'cefr_level', 'estimated_minutes', 'is_active']
     list_filter = ['category', 'cefr_level', 'is_active']
     search_fields = ['name', 'location', 'description']
+    actions_list = ["import_topics"]
+
+    @action(description="Import Topic & Questions", icon="upload_file", url_path="import")
+    def import_topics(self, request):
+        if request.method == "POST":
+            json_file = request.FILES.get("json_file")
+            if not json_file:
+                messages.error(request, "Pilih file JSON terlebih dahulu.")
+            else:
+                try:
+                    created = import_topics_from_json(json_file)
+                    messages.success(request, f"{len(created)} topic berhasil diimport: {', '.join(created)}")
+                    return HttpResponseRedirect(reverse("admin:quiz_topic_changelist"))
+                except Exception as e:
+                    messages.error(request, str(e))
+
+        context = self.admin_site.each_context(request)
+        context["title"] = "Import Topic & Questions"
+        return render(request, "admin/quiz/topic/import.html", context)
 
 
 @admin.register(Question)
