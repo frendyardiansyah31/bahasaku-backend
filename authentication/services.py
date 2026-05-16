@@ -99,11 +99,12 @@ def onboard_user(user: User, country: str, initial_level: str) -> tuple[User, No
 
 
 def get_dashboard_data(user: User) -> dict:
-    """
-    Kumpulkan semua data untuk halaman dashboard.
-    P1 placeholder — skill scores, sessions, dan streak activity selalu default
-    karena tabel USER_SKILL dan SESSION belum ada.
-    """
+    """Kumpulkan semua data real untuk halaman dashboard (P2)."""
+    # Import di dalam fungsi untuk menghindari circular import
+    # (quiz.models → authentication.models, jadi auth tidak boleh import quiz di level modul)
+    from quiz.models import Session, UserSkill
+    from quiz.services import AdaptiveService
+
     _ID_DAYS = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min']
     _ID_DAYS_FULL = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu']
     _ID_MONTHS = [
@@ -137,6 +138,74 @@ def get_dashboard_data(user: User) -> dict:
     cefr, label = _get_cefr(user.xp)
     next_xp = _get_next_level_xp(user.xp)
 
+    # ── Skill scores (real dari UserSkill) ────────────────────────────────────
+    skill_map = {
+        us.skill: us
+        for us in UserSkill.objects.filter(user=user)
+    }
+    skill_keys = ['kosakata', 'grammar', 'menyimak']
+    skills_data = []
+    strongest_skill = None
+    strongest_score = -1
+    for skill_key in skill_keys:
+        us = skill_map.get(skill_key)
+        score = us.score if us else 50
+        skills_data.append({
+            'skill': skill_key,
+            'score': score,
+            'delta_this_week': 0,
+            'status': _get_skill_status(score),
+        })
+        if score > strongest_score:
+            strongest_score = score
+            strongest_skill = skill_key
+
+    # ── Session activity minggu ini ───────────────────────────────────────────
+    week_start = week_days[0]
+    week_sessions = Session.objects.filter(
+        user=user,
+        status='finished',
+        finished_at__date__gte=week_start,
+    )
+    sessions_this_week = week_sessions.count()
+    total_questions_answered = sum(s.total_questions for s in week_sessions)
+    avg_score = (
+        round(sum(
+            (s.correct_count / s.total_questions * 100)
+            for s in week_sessions if s.total_questions > 0
+        ) / sessions_this_week)
+        if sessions_this_week > 0 else 0
+    )
+    xp_today = sum(
+        s.xp_gained
+        for s in week_sessions.filter(finished_at__date=today)
+    )
+
+    # Hari-hari yang user aktif minggu ini
+    active_dates = set(
+        Session.objects.filter(
+            user=user,
+            status='finished',
+            finished_at__date__gte=week_start,
+            finished_at__date__lte=week_days[-1],
+        ).values_list('finished_at__date', flat=True)
+    )
+
+    # ── Rekomendasi topik (real dari AdaptiveService) ─────────────────────────
+    recommended_topic = AdaptiveService.get_daily_recommendation(user)
+    recommended_topics = []
+    if recommended_topic:
+        recommended_topics = [{
+            'id': recommended_topic.id,
+            'icon': recommended_topic.icon,
+            'name': recommended_topic.name,
+            'description': recommended_topic.description,
+            'cefr_level': recommended_topic.cefr_level,
+            'skills': recommended_topic.skills,
+            'estimated_minutes': recommended_topic.estimated_minutes,
+            'total_questions': recommended_topic.question_count,
+        }]
+
     return {
         'greeting': {
             'name': user.name,
@@ -156,23 +225,20 @@ def get_dashboard_data(user: User) -> dict:
                 {
                     'day': _ID_DAYS[d.weekday()],
                     'date': d.isoformat(),
-                    'is_active': False,
+                    'is_active': d in active_dates,
                 }
                 for d in week_days
             ],
         },
-        'skills': [
-            {'skill': skill, 'score': 50, 'delta_this_week': 0, 'status': _get_skill_status(50)}
-            for skill in ['kosakata', 'grammar', 'menyimak']
-        ],
-        'recommended_topics': [],
+        'skills': skills_data,
+        'recommended_topics': recommended_topics,
         'activity_summary': {
-            'sessions_this_week': 0,
-            'total_questions_answered': 0,
-            'average_score': 0,
+            'sessions_this_week': sessions_this_week,
+            'total_questions_answered': total_questions_answered,
+            'average_score': avg_score,
             'cefr_level': cefr,
             'cefr_label': label,
-            'strongest_skill': None,
-            'xp_today': 0,
+            'strongest_skill': strongest_skill,
+            'xp_today': xp_today,
         },
     }

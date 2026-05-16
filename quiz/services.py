@@ -2,10 +2,10 @@ import json
 from datetime import date
 
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, ExpressionWrapper, F, FloatField, Q
 from django.utils import timezone
 
-from .models import Question, Session, Topic, UserSkill
+from .models import Question, Session, Topic, UserSkill, SKILL_CHOICES
 
 XP_PER_CORRECT = 10
 
@@ -13,11 +13,6 @@ XP_PER_CORRECT = 10
 # ── TOPICS ───────────────────────────────────────────────────────────────────
 
 def _get_user_progress(user, topic) -> dict:
-    """
-    Hitung progress user untuk satu topik berdasarkan Session.
-    - Belum ada session finished → 0%, "Belum dimulai"
-    - Ada session finished → 100%, "Selesai"
-    """
     has_finished = Session.objects.filter(user=user, topic=topic, status='finished').exists()
     if has_finished:
         return {'percent': 100, 'status': 'Selesai'}
@@ -41,10 +36,6 @@ def _topic_to_summary(topic, user) -> dict:
 
 
 def get_topics(user, category: str = None, search: str = None) -> dict:
-    """
-    Ambil semua topik aktif dengan progress user.
-    Mendukung filter category dan pencarian teks (nama/lokasi/deskripsi).
-    """
     qs = Topic.objects.filter(is_active=True).annotate(question_count=Count('questions'))
 
     if category:
@@ -65,10 +56,6 @@ def get_topics(user, category: str = None, search: str = None) -> dict:
 
 
 def get_topic_detail(user, topic_id: int) -> dict | None:
-    """
-    Ambil detail lengkap satu topik termasuk contoh percakapan dan subtopik.
-    Return None jika topik tidak ditemukan atau tidak aktif.
-    """
     try:
         topic = Topic.objects.filter(is_active=True).annotate(
             question_count=Count('questions')
@@ -94,7 +81,10 @@ def get_topic_or_none(topic_id):
 
 
 def get_or_create_user_skill(user, skill):
-    obj, _ = UserSkill.objects.get_or_create(user=user, skill=skill, defaults={'score': 50})
+    obj, _ = UserSkill.objects.get_or_create(
+        user=user, skill=skill,
+        defaults={'score': 50, 'error_count': 0},
+    )
     return obj
 
 
@@ -183,62 +173,9 @@ def _evaluate_answer(question, answer):
     return False
 
 
-def finish_session(session_id, user):
-    try:
-        session = Session.objects.get(id=session_id, user=user, status='ongoing')
-    except Session.DoesNotExist:
-        return None, 'Session tidak valid atau sudah selesai'
-
-    session.status = 'finished'
-    session.finished_at = timezone.now()
-    session.save(update_fields=['status', 'finished_at'])
-
-    topic = session.topic
-    score_percent = (
-        round((session.correct_count / session.total_questions) * 100)
-        if session.total_questions > 0 else 0
-    )
-
-    today = date.today()
-
-    if user.last_active and (today - user.last_active).days == 1:
-        user.streak += 1
-    elif not user.last_active or (today - user.last_active).days > 1:
-        user.streak = 1
-
-    user.xp += session.xp_gained
-    user.last_active = today
-    user.save(update_fields=['xp', 'streak', 'last_active'])
-
-    skills_updated = []
-    for skill_name in (topic.skills or []):
-        skill_obj = get_or_create_user_skill(user, skill_name)
-        old_score = skill_obj.score
-        new_score = max(0, min(100, round(old_score * 0.7 + score_percent * 0.3)))
-        skill_obj.score = new_score
-        skill_obj.last_practiced = today
-        skill_obj.save(update_fields=['score', 'last_practiced'])
-        skills_updated.append({'skill': skill_name, 'old_score': old_score, 'new_score': new_score})
-
-    return {
-        'session_id': session.id,
-        'topic_name': topic.name,
-        'correct_count': session.correct_count,
-        'total_questions': session.total_questions,
-        'score_percent': score_percent,
-        'xp_gained': session.xp_gained,
-        'streak': user.streak,
-        'skills_updated': skills_updated,
-    }, None
-
-
 # ── IMPORT ────────────────────────────────────────────────────────────────────
 
 def import_topics_from_json(json_file):
-    """
-    Baca file JSON, buat Topic + Question-nya sekaligus.
-    Jika ada error di mana pun, semua perubahan di-rollback (atomic).
-    """
     try:
         data = json.load(json_file)
     except json.JSONDecodeError as e:
@@ -257,3 +194,181 @@ def import_topics_from_json(json_file):
             created_names.append(topic.name)
 
     return created_names
+
+
+# ── ADAPTIVE ──────────────────────────────────────────────────────────────────
+
+class AdaptiveService:
+    # Hari idle yang diasumsikan jika user belum pernah latihan skill tersebut
+    _DAYS_IDLE_NEVER = 30
+
+    @staticmethod
+    def calculate_skill_priority(user_skill) -> float:
+        """
+        Priority = (weakness × 0.5) + (days_idle × 0.3) + (error_freq × 0.2)
+        Semakin tinggi nilai, semakin mendesak skill ini untuk dilatih.
+        """
+        weakness = 100 - user_skill.score
+        days_idle = (
+            (date.today() - user_skill.last_practiced).days
+            if user_skill.last_practiced
+            else AdaptiveService._DAYS_IDLE_NEVER
+        )
+        return (weakness * 0.5) + (days_idle * 0.3) + (user_skill.error_count * 0.2)
+
+    @staticmethod
+    def get_daily_recommendation(user):
+        """
+        Temukan 1 topik terbaik untuk dilatih hari ini berdasarkan priority skill.
+
+        Alur:
+        1. Pastikan semua UserSkill records ada untuk user ini.
+        2. Urutkan skill berdasarkan priority (tertinggi duluan).
+        3. Untuk setiap skill, cari topik aktif yang mengandung skill itu
+           dan belum dikuasai (belum pernah selesai ATAU skor terakhir < 70%).
+        4. Kembalikan topik pertama yang ditemukan; None jika tidak ada topik sama sekali.
+        """
+        skills = []
+        for skill_key, _ in SKILL_CHOICES:
+            us, _ = UserSkill.objects.get_or_create(
+                user=user, skill=skill_key,
+                defaults={'score': 50, 'error_count': 0},
+            )
+            skills.append(us)
+
+        skills.sort(key=AdaptiveService.calculate_skill_priority, reverse=True)
+
+        # Topik yang sudah dikuasai: pernah selesai dengan skor >= 70%
+        mastered_topic_ids = set(
+            Session.objects
+            .filter(user=user, status='finished', total_questions__gt=0)
+            .annotate(
+                score_ratio=ExpressionWrapper(
+                    F('correct_count') * 1.0 / F('total_questions'),
+                    output_field=FloatField(),
+                )
+            )
+            .filter(score_ratio__gte=0.7)
+            .values_list('topic_id', flat=True)
+        )
+
+        # JSONField.__contains hanya didukung PostgreSQL, bukan SQLite.
+        # Fetch semua eligible topics sekaligus lalu filter skill di Python.
+        eligible_topics = list(
+            Topic.objects
+            .filter(is_active=True)
+            .exclude(id__in=mastered_topic_ids)
+            .annotate(question_count=Count('questions'))
+        )
+
+        for user_skill in skills:
+            for topic in eligible_topics:
+                if user_skill.skill in (topic.skills or []):
+                    return topic
+
+        # Fallback: semua topik sudah dikuasai, kembalikan topik mana saja
+        return (
+            Topic.objects
+            .filter(is_active=True)
+            .annotate(question_count=Count('questions'))
+            .first()
+        )
+
+
+# ── QUIZ SERVICE (P2) ─────────────────────────────────────────────────────────
+
+class QuizService:
+
+    @staticmethod
+    def finish_session(user, session_id, results_data):
+        """
+        Selesaikan sesi kuis berdasarkan daftar hasil jawaban per soal.
+
+        `results_data` adalah list dari {question_id, is_correct} yang dikirim frontend.
+        Fungsi ini menghitung skor per skill lalu mengupdate UserSkill (score, error_count,
+        last_practiced) secara akurat — berbeda dari finish_session lama yang hanya
+        menggunakan rata-rata topik.
+        """
+        try:
+            session = Session.objects.get(id=session_id, user=user, status='ongoing')
+        except Session.DoesNotExist:
+            return None, 'Session tidak valid atau sudah selesai'
+
+        question_ids = [r['question_id'] for r in results_data]
+        questions_map = {
+            q.id: q
+            for q in Question.objects.filter(id__in=question_ids, topic=session.topic)
+        }
+
+        # Hitung benar/salah per skill berdasarkan hasil jawaban
+        skill_stats: dict[str, dict] = {}
+        total_correct = 0
+        for result in results_data:
+            q = questions_map.get(result['question_id'])
+            if not q:
+                continue
+            if q.skill not in skill_stats:
+                skill_stats[q.skill] = {'correct': 0, 'wrong': 0}
+            if result['is_correct']:
+                skill_stats[q.skill]['correct'] += 1
+                total_correct += 1
+            else:
+                skill_stats[q.skill]['wrong'] += 1
+
+        total_questions = len(results_data)
+        score_percent = (
+            round((total_correct / total_questions) * 100) if total_questions > 0 else 0
+        )
+        xp_gained = total_correct * XP_PER_CORRECT
+
+        # Simpan hasil akhir sesi
+        session.correct_count = total_correct
+        session.total_questions = total_questions
+        session.xp_gained = xp_gained
+        session.status = 'finished'
+        session.finished_at = timezone.now()
+        session.save(update_fields=['correct_count', 'total_questions', 'xp_gained', 'status', 'finished_at'])
+
+        # Update XP dan streak user
+        today = date.today()
+        if user.last_active and (today - user.last_active).days == 1:
+            user.streak += 1
+        elif not user.last_active or (today - user.last_active).days > 1:
+            user.streak = 1
+        user.xp += xp_gained
+        user.last_active = today
+        user.save(update_fields=['xp', 'streak', 'last_active'])
+
+        # Update UserSkill per skill — inilah yang membuat adaptive algorithm bekerja
+        skills_updated = []
+        for skill_name, stats in skill_stats.items():
+            skill_obj = get_or_create_user_skill(user, skill_name)
+            old_score = skill_obj.score
+            skill_total = stats['correct'] + stats['wrong']
+            skill_score_pct = (
+                round((stats['correct'] / skill_total) * 100) if skill_total > 0 else 0
+            )
+            # Weighted moving average: 70% skor lama, 30% skor sesi ini
+            new_score = max(0, min(100, round(old_score * 0.7 + skill_score_pct * 0.3)))
+            skill_obj.score = new_score
+            skill_obj.error_count += stats['wrong']
+            skill_obj.last_practiced = today
+            skill_obj.save(update_fields=['score', 'error_count', 'last_practiced'])
+            skills_updated.append({
+                'skill': skill_name,
+                'old_score': old_score,
+                'new_score': new_score,
+                'correct': stats['correct'],
+                'wrong': stats['wrong'],
+            })
+
+        return {
+            'session_id': session.id,
+            'topic_name': session.topic.name,
+            'correct_count': total_correct,
+            'total_questions': total_questions,
+            'score_percent': score_percent,
+            'xp_gained': xp_gained,
+            'streak': user.streak,
+            'skills_updated': skills_updated,
+        }, None

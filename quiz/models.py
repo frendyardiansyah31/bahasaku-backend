@@ -85,6 +85,7 @@ class UserSkill(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='skills')
     skill = models.CharField(max_length=20, choices=SKILL_CHOICES)
     score = models.IntegerField(default=50)
+    error_count = models.IntegerField(default=0)
     last_practiced = models.DateField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 

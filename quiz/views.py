@@ -6,16 +6,24 @@ from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse, inline_serializer
 from drf_spectacular.types import OpenApiTypes
 
-from .serializers import AnswerRequestSerializer, FinishSessionSerializer
+from .serializers import AnswerRequestSerializer, QuizFinishSerializer, TopicRecommendationSerializer
 from .services import (
-    check_answer, finish_session, get_topic_detail, get_topic_or_none,
-    get_topics, start_session,
+    AdaptiveService, QuizService,
+    check_answer, get_topic_detail, get_topic_or_none, get_topics, start_session,
 )
 
 ErrorResponseSerializer = inline_serializer(
     name='ErrorMessageResponse',
     fields={'message': serializers.CharField()}
 )
+
+
+def _first_error(errors: dict) -> str:
+    first = next(iter(errors.values()))
+    return str(first[0] if isinstance(first, list) else first)
+
+
+# ── TOPICS ────────────────────────────────────────────────────────────────────
 
 class TopicListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -27,9 +35,7 @@ class TopicListView(APIView):
             OpenApiParameter(name='category', description='Filter berdasarkan kategori', required=False, type=OpenApiTypes.STR),
             OpenApiParameter(name='search', description='Pencarian kata kunci pada judul topik', required=False, type=OpenApiTypes.STR),
         ],
-        responses={
-            200: OpenApiResponse(response=dict, description="Berisi list dari data topik")
-        },
+        responses={200: OpenApiResponse(response=dict, description="Berisi list dari data topik")},
         tags=['Topics']
     )
     def get(self, request):
@@ -47,7 +53,7 @@ class TopicDetailView(APIView):
         description="Melihat detail dari satu topik berdasarkan ID.",
         responses={
             200: OpenApiResponse(response=dict, description="Detail data topik"),
-            404: OpenApiResponse(response=ErrorResponseSerializer, description="Topik tidak ditemukan")
+            404: OpenApiResponse(response=ErrorResponseSerializer, description="Topik tidak ditemukan"),
         },
         tags=['Topics']
     )
@@ -58,6 +64,8 @@ class TopicDetailView(APIView):
         return Response(data, status=status.HTTP_200_OK)
 
 
+# ── QUIZ SESSION ──────────────────────────────────────────────────────────────
+
 class StartSessionView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -66,7 +74,7 @@ class StartSessionView(APIView):
         description="Membuat sesi baru untuk topik tertentu dan mengembalikan daftar pertanyaan yang harus dijawab.",
         responses={
             200: OpenApiResponse(response=dict, description="Data sesi dan list pertanyaan"),
-            404: OpenApiResponse(response=ErrorResponseSerializer, description="Topik tidak ditemukan")
+            404: OpenApiResponse(response=ErrorResponseSerializer, description="Topik tidak ditemukan"),
         },
         tags=['Quiz Session']
     )
@@ -74,7 +82,6 @@ class StartSessionView(APIView):
         topic = get_topic_or_none(topic_id)
         if not topic:
             return Response({'message': 'Topik tidak ditemukan'}, status=status.HTTP_404_NOT_FOUND)
-
         data = start_session(user=request.user, topic=topic)
         return Response(data, status=status.HTTP_200_OK)
 
@@ -88,15 +95,14 @@ class AnswerView(APIView):
         request=AnswerRequestSerializer,
         responses={
             200: OpenApiResponse(response=dict, description="Status jawaban (benar/salah) dan penjelasan"),
-            400: OpenApiResponse(response=ErrorResponseSerializer, description="Validasi gagal atau error pada pengecekan jawaban")
+            400: OpenApiResponse(response=ErrorResponseSerializer, description="Validasi gagal atau error pada pengecekan jawaban"),
         },
         tags=['Quiz Session']
     )
     def post(self, request, topic_id):
         serializer = AnswerRequestSerializer(data=request.data)
         if not serializer.is_valid():
-            first_error = next(iter(serializer.errors.values()))[0]
-            return Response({'message': str(first_error)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'message': _first_error(serializer.errors)}, status=status.HTTP_400_BAD_REQUEST)
 
         result, error = check_answer(
             session_id=serializer.validated_data['session_id'],
@@ -106,34 +112,77 @@ class AnswerView(APIView):
         )
         if error:
             return Response({'message': error}, status=status.HTTP_400_BAD_REQUEST)
-
         return Response(result, status=status.HTTP_200_OK)
 
 
-class FinishSessionView(APIView):
+class FinishQuizView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
         summary="Akhiri Sesi Kuis",
-        description="Mengakhiri sesi kuis, menghitung skor akhir, dan menambahkan XP ke profile user.",
-        request=FinishSessionSerializer,
+        description=(
+            "Mengakhiri sesi kuis dengan mengirimkan hasil jawaban per soal. "
+            "Skor dihitung per skill sehingga adaptive algorithm bisa update UserSkill secara akurat."
+        ),
+        request=QuizFinishSerializer,
         responses={
-            200: OpenApiResponse(response=dict, description="Hasil akhir (skor, XP yang didapat, status lulus)"),
-            400: OpenApiResponse(response=ErrorResponseSerializer, description="Sesi tidak valid atau terjadi error")
+            200: OpenApiResponse(response=dict, description="Hasil akhir (skor, XP, streak, skills_updated)"),
+            400: OpenApiResponse(response=ErrorResponseSerializer, description="Sesi tidak valid atau validasi gagal"),
         },
         tags=['Quiz Session']
     )
     def post(self, request, topic_id):
-        serializer = FinishSessionSerializer(data=request.data)
+        serializer = QuizFinishSerializer(data=request.data)
         if not serializer.is_valid():
-            first_error = next(iter(serializer.errors.values()))[0]
-            return Response({'message': str(first_error)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'message': _first_error(serializer.errors)}, status=status.HTTP_400_BAD_REQUEST)
 
-        result, error = finish_session(
-            session_id=serializer.validated_data['session_id'],
+        result, error = QuizService.finish_session(
             user=request.user,
+            session_id=serializer.validated_data['session_id'],
+            results_data=serializer.validated_data['answers'],
         )
         if error:
             return Response({'message': error}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'message': 'Kuis berhasil diselesaikan', **result}, status=status.HTTP_200_OK)
 
-        return Response(result, status=status.HTTP_200_OK)
+
+# ── ADAPTIVE / RECOMMENDATION ─────────────────────────────────────────────────
+
+class DailyRecommendationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Rekomendasi Topik Harian",
+        description=(
+            "Mengembalikan 1 topik yang paling direkomendasikan untuk dilatih hari ini "
+            "berdasarkan algoritma adaptive: skill dengan priority tertinggi = "
+            "(weakness × 0.5) + (days_idle × 0.3) + (error_freq × 0.2)."
+        ),
+        responses={
+            200: OpenApiResponse(
+                response=inline_serializer(
+                    name='DailyRecommendationResponse',
+                    fields={
+                        'message': serializers.CharField(),
+                        'recommendation': TopicRecommendationSerializer(),
+                    }
+                ),
+                description="Topik rekomendasi, atau recommendation=null jika belum ada topik",
+            ),
+        },
+        tags=['Adaptive']
+    )
+    def get(self, request):
+        topic = AdaptiveService.get_daily_recommendation(user=request.user)
+        if topic is None:
+            return Response(
+                {'message': 'Belum ada topik tersedia', 'recommendation': None},
+                status=status.HTTP_200_OK,
+            )
+        return Response(
+            {
+                'message': 'Rekomendasi berhasil diambil',
+                'recommendation': TopicRecommendationSerializer(topic).data,
+            },
+            status=status.HTTP_200_OK,
+        )
