@@ -19,8 +19,19 @@ ErrorResponseSerializer = inline_serializer(
 
 
 def _first_error(errors: dict) -> str:
-    first = next(iter(errors.values()))
-    return str(first[0] if isinstance(first, list) else first)
+    for field, errs in errors.items():
+        if isinstance(errs, list) and errs:
+            first = errs[0]
+            if isinstance(first, dict):
+                for sub_field, sub_errs in first.items():
+                    msg = sub_errs[0] if isinstance(sub_errs, list) else sub_errs
+                    return f"{field}.{sub_field}: {msg}"
+            return f"{field}: {first}"
+        if isinstance(errs, dict):
+            for sub_field, sub_errs in errs.items():
+                msg = sub_errs[0] if isinstance(sub_errs, list) else sub_errs
+                return f"{field}.{sub_field}: {msg}"
+    return "Validasi gagal"
 
 
 # ── TOPICS ────────────────────────────────────────────────────────────────────
