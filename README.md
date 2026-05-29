@@ -1,3 +1,13 @@
+---
+title: BahasaKu Backend
+emoji: 🌏
+colorFrom: green
+colorTo: blue
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # BahasaKu
 
 Backend API untuk platform latihan Bahasa Indonesia adaptif bagi mahasiswa asing di UIII (Universitas Islam Internasional Indonesia). Dibangun dengan Django REST Framework.
