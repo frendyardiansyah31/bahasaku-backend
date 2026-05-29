@@ -81,6 +81,19 @@ class Session(models.Model):
         return f"{self.user.email} — {self.topic.name} ({self.status})"
 
 
+class SessionAnswer(models.Model):
+    session = models.ForeignKey(Session, on_delete=models.CASCADE, related_name='answer_records')
+    question = models.ForeignKey(Question, on_delete=models.CASCADE)
+    is_correct = models.BooleanField()
+    answered_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('session', 'question')
+
+    def __str__(self):
+        return f"Session {self.session_id} Q{self.question_id} {'✓' if self.is_correct else '✗'}"
+
+
 class UserSkill(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='skills')
     skill = models.CharField(max_length=20, choices=SKILL_CHOICES)

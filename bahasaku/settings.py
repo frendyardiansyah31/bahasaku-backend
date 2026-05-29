@@ -158,6 +158,30 @@ CSRF_TRUSTED_ORIGINS = [
     'https://frendyardiansyah31-bahasaku-backend.hf.space',
 ]
 
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{levelname}] {asctime} {name} — {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'quiz': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+    },
+}
+
 UNFOLD = {
     "SITE_TITLE": "BahasaKu Admin",
     "SITE_HEADER": "BahasaKu",

@@ -16,7 +16,7 @@ class QuizAnswerResultSerializer(serializers.Serializer):
 
 class QuizFinishSerializer(serializers.Serializer):
     session_id = serializers.IntegerField()
-    answers = QuizAnswerResultSerializer(many=True, allow_empty=False)
+    answers = QuizAnswerResultSerializer(many=True, allow_empty=False, required=False, default=list)
 
 
 # ── P2: Recommendation ────────────────────────────────────────────────────────

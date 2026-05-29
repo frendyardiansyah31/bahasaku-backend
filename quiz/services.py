@@ -5,7 +5,7 @@ from django.db import transaction
 from django.db.models import Count, ExpressionWrapper, F, FloatField, Q
 from django.utils import timezone
 
-from .models import Question, Session, Topic, UserSkill, SKILL_CHOICES
+from .models import Question, Session, SessionAnswer, Topic, UserSkill, SKILL_CHOICES
 
 XP_PER_CORRECT = 10
 
@@ -140,6 +140,12 @@ def check_answer(session_id, question_id, answer, user):
         return None, 'Soal tidak ditemukan'
 
     is_correct = _evaluate_answer(question, answer)
+
+    SessionAnswer.objects.update_or_create(
+        session=session,
+        question=question,
+        defaults={'is_correct': is_correct},
+    )
 
     if is_correct:
         session.correct_count += 1
@@ -280,19 +286,26 @@ class AdaptiveService:
 class QuizService:
 
     @staticmethod
-    def finish_session(user, session_id, results_data):
+    def finish_session(user, session_id, results_data=None):
         """
-        Selesaikan sesi kuis berdasarkan daftar hasil jawaban per soal.
+        Selesaikan sesi kuis.
 
-        `results_data` adalah list dari {question_id, is_correct} yang dikirim frontend.
-        Fungsi ini menghitung skor per skill lalu mengupdate UserSkill (score, error_count,
-        last_practiced) secara akurat — berbeda dari finish_session lama yang hanya
-        menggunakan rata-rata topik.
+        `results_data` (opsional): list {question_id, is_correct} dari frontend.
+        Jika tidak dikirim, jawaban dibaca dari SessionAnswer yang tersimpan saat /answer/.
         """
         try:
             session = Session.objects.get(id=session_id, user=user, status='ongoing')
         except Session.DoesNotExist:
             return None, 'Session tidak valid atau sudah selesai'
+
+        # Gunakan jawaban dari DB jika frontend tidak kirim ulang
+        if not results_data:
+            results_data = list(
+                SessionAnswer.objects
+                .filter(session=session)
+                .select_related('question')
+                .values('question_id', 'is_correct')
+            )
 
         question_ids = [r['question_id'] for r in results_data]
         questions_map = {

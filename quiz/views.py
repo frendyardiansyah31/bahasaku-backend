@@ -1,7 +1,11 @@
+import logging
+
 from rest_framework import status, serializers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+logger = logging.getLogger(__name__)
 
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse, inline_serializer
 from drf_spectacular.types import OpenApiTypes
@@ -111,8 +115,10 @@ class AnswerView(APIView):
         tags=['Quiz Session']
     )
     def post(self, request, topic_id):
+        logger.debug("[AnswerView] user=%s topic_id=%s body=%s", request.user, topic_id, request.data)
         serializer = AnswerRequestSerializer(data=request.data)
         if not serializer.is_valid():
+            logger.warning("[AnswerView] validation error: %s", serializer.errors)
             return Response({'message': _first_error(serializer.errors)}, status=status.HTTP_400_BAD_REQUEST)
 
         result, error = check_answer(
@@ -143,16 +149,30 @@ class FinishQuizView(APIView):
         tags=['Quiz Session']
     )
     def post(self, request, topic_id):
+        logger.debug(
+            "[FinishQuizView] user=%s topic_id=%s raw_body=%s",
+            request.user, topic_id, request.data,
+        )
         serializer = QuizFinishSerializer(data=request.data)
         if not serializer.is_valid():
+            logger.warning(
+                "[FinishQuizView] validation FAILED user=%s topic_id=%s errors=%s raw_body=%s",
+                request.user, topic_id, serializer.errors, request.data,
+            )
             return Response({'message': _first_error(serializer.errors)}, status=status.HTTP_400_BAD_REQUEST)
 
+        logger.debug(
+            "[FinishQuizView] validation OK session_id=%s answers_count=%d",
+            serializer.validated_data['session_id'],
+            len(serializer.validated_data['answers']),
+        )
         result, error = QuizService.finish_session(
             user=request.user,
             session_id=serializer.validated_data['session_id'],
             results_data=serializer.validated_data['answers'],
         )
         if error:
+            logger.warning("[FinishQuizView] service error: %s", error)
             return Response({'message': error}, status=status.HTTP_400_BAD_REQUEST)
         return Response({'message': 'Kuis berhasil diselesaikan', **result}, status=status.HTTP_200_OK)
 
